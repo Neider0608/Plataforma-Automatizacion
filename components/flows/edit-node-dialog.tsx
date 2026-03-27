@@ -837,6 +837,300 @@ export function EditNodeDialog({
               </div>
             )}
 
+            {/* Columnas a seleccionar para SELECT */}
+            {config.dbOperation === "select" && config.tableName && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-foreground">Columnas a Consultar</Label>
+                  <Badge 
+                    variant="outline" 
+                    className="text-[10px] cursor-pointer hover:bg-primary/20"
+                    onClick={() => updateConfig("selectColumns", "*")}
+                  >
+                    Todas (*)
+                  </Badge>
+                </div>
+                <Input
+                  placeholder="id, nombre, email, fecha_creacion (o * para todas)"
+                  value={config.selectColumns || "*"}
+                  onChange={(e) => updateConfig("selectColumns", e.target.value)}
+                  className="glass border-border bg-transparent font-mono text-sm"
+                />
+              </div>
+            )}
+
+            {/* Columnas y valores para INSERT */}
+            {config.dbOperation === "insert" && config.tableName && (
+              <div className="space-y-3 p-4 rounded-lg border border-dashed border-primary/50 bg-primary/5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-foreground">Columnas y Valores a Insertar</Label>
+                    <p className="text-xs text-muted-foreground">Define cada columna y su valor (puede ser variable)</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 glass border-border"
+                    onClick={() => {
+                      const newCols = [...(config.insertColumns || [])]
+                      newCols.push({ column: "", value: "", type: "string" })
+                      updateConfig("insertColumns", newCols)
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Columna
+                  </Button>
+                </div>
+
+                {(config.insertColumns || []).length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground text-xs border border-dashed border-border rounded-lg">
+                    Agrega las columnas que deseas insertar
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(config.insertColumns || []).map((col: any, i: number) => (
+                      <div key={i} className="p-3 rounded-lg bg-background/50 border border-border space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Columna</Label>
+                            <Input
+                              placeholder="nombre_columna"
+                              value={col.column || ""}
+                              onChange={(e) => {
+                                const newCols = [...(config.insertColumns || [])]
+                                newCols[i] = { ...newCols[i], column: e.target.value }
+                                updateConfig("insertColumns", newCols)
+                              }}
+                              className="glass border-border bg-transparent text-sm h-8 font-mono"
+                            />
+                          </div>
+                          <div className="w-24 space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Tipo</Label>
+                            <Select
+                              value={col.type || "string"}
+                              onValueChange={(val) => {
+                                const newCols = [...(config.insertColumns || [])]
+                                newCols[i] = { ...newCols[i], type: val }
+                                updateConfig("insertColumns", newCols)
+                              }}
+                            >
+                              <SelectTrigger className="glass border-border bg-transparent h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="glass border-border">
+                                <SelectItem value="string">Texto</SelectItem>
+                                <SelectItem value="number">Numero</SelectItem>
+                                <SelectItem value="boolean">Boolean</SelectItem>
+                                <SelectItem value="date">Fecha</SelectItem>
+                                <SelectItem value="json">JSON</SelectItem>
+                                <SelectItem value="null">NULL</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-500/10 mt-5"
+                            onClick={() => {
+                              const newCols = (config.insertColumns || []).filter((_: any, idx: number) => idx !== i)
+                              updateConfig("insertColumns", newCols)
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Valor (usa variables con {"{{...}}"})</Label>
+                          <Input
+                            placeholder="{{trigger.body.nombre}} o valor estatico"
+                            value={col.value || ""}
+                            onChange={(e) => {
+                              const newCols = [...(config.insertColumns || [])]
+                              newCols[i] = { ...newCols[i], value: e.target.value }
+                              updateConfig("insertColumns", newCols)
+                            }}
+                            className="glass border-border bg-transparent text-sm h-8 font-mono"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Plantillas rapidas para INSERT */}
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground mb-2">Plantillas rapidas:</p>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] cursor-pointer hover:bg-primary/20"
+                      onClick={() => {
+                        updateConfig("insertColumns", [
+                          { column: "id", value: "{{trigger.body.id}}", type: "number" },
+                          { column: "nombre", value: "{{trigger.body.nombre}}", type: "string" },
+                          { column: "email", value: "{{trigger.body.email}}", type: "string" },
+                          { column: "created_at", value: "NOW()", type: "date" },
+                        ])
+                      }}
+                    >
+                      Usuario basico
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] cursor-pointer hover:bg-primary/20"
+                      onClick={() => {
+                        updateConfig("insertColumns", [
+                          { column: "nit", value: "{{xml.factura.nit}}", type: "string" },
+                          { column: "numero_factura", value: "{{xml.factura.numero}}", type: "string" },
+                          { column: "fecha", value: "{{xml.factura.fecha}}", type: "date" },
+                          { column: "total", value: "{{xml.factura.total}}", type: "number" },
+                          { column: "iva", value: "{{xml.factura.iva}}", type: "number" },
+                          { column: "proveedor", value: "{{xml.factura.proveedor.nombre}}", type: "string" },
+                        ])
+                      }}
+                    >
+                      Factura XML
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] cursor-pointer hover:bg-primary/20"
+                      onClick={() => {
+                        updateConfig("insertColumns", [
+                          { column: "data", value: "{{trigger.body}}", type: "json" },
+                          { column: "source", value: "{{trigger.headers.origin}}", type: "string" },
+                          { column: "received_at", value: "NOW()", type: "date" },
+                        ])
+                      }}
+                    >
+                      Webhook generico
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Vista previa del INSERT */}
+                {(config.insertColumns || []).some((c: any) => c.column && c.value) && (
+                  <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                    <p className="text-xs font-medium text-foreground mb-2">Vista previa SQL:</p>
+                    <code className="text-[11px] font-mono text-muted-foreground block whitespace-pre-wrap">
+                      INSERT INTO {config.tableName} ({(config.insertColumns || []).filter((c: any) => c.column).map((c: any) => c.column).join(", ")}){"\n"}
+                      VALUES ({(config.insertColumns || []).filter((c: any) => c.column).map((c: any) => 
+                        c.type === "string" ? `'${c.value}'` : 
+                        c.type === "null" ? "NULL" : c.value
+                      ).join(", ")})
+                    </code>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Columnas y valores para UPDATE */}
+            {config.dbOperation === "update" && config.tableName && (
+              <div className="space-y-3 p-4 rounded-lg border border-dashed border-yellow-500/50 bg-yellow-500/5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-foreground">Columnas a Actualizar</Label>
+                    <p className="text-xs text-muted-foreground">Define cada columna y su nuevo valor</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 glass border-border"
+                    onClick={() => {
+                      const newCols = [...(config.updateColumns || [])]
+                      newCols.push({ column: "", value: "", type: "string" })
+                      updateConfig("updateColumns", newCols)
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Columna
+                  </Button>
+                </div>
+
+                {(config.updateColumns || []).length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground text-xs border border-dashed border-border rounded-lg">
+                    Agrega las columnas que deseas actualizar
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(config.updateColumns || []).map((col: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-background/50 border border-border">
+                        <div className="flex-1">
+                          <Input
+                            placeholder="columna"
+                            value={col.column || ""}
+                            onChange={(e) => {
+                              const newCols = [...(config.updateColumns || [])]
+                              newCols[i] = { ...newCols[i], column: e.target.value }
+                              updateConfig("updateColumns", newCols)
+                            }}
+                            className="glass border-border bg-transparent text-sm h-8 font-mono"
+                          />
+                        </div>
+                        <span className="text-muted-foreground">=</span>
+                        <div className="flex-1">
+                          <Input
+                            placeholder="{{variable}} o valor"
+                            value={col.value || ""}
+                            onChange={(e) => {
+                              const newCols = [...(config.updateColumns || [])]
+                              newCols[i] = { ...newCols[i], value: e.target.value }
+                              updateConfig("updateColumns", newCols)
+                            }}
+                            className="glass border-border bg-transparent text-sm h-8 font-mono"
+                          />
+                        </div>
+                        <Select
+                          value={col.type || "string"}
+                          onValueChange={(val) => {
+                            const newCols = [...(config.updateColumns || [])]
+                            newCols[i] = { ...newCols[i], type: val }
+                            updateConfig("updateColumns", newCols)
+                          }}
+                        >
+                          <SelectTrigger className="glass border-border bg-transparent h-8 w-20 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="glass border-border">
+                            <SelectItem value="string">Texto</SelectItem>
+                            <SelectItem value="number">Num</SelectItem>
+                            <SelectItem value="boolean">Bool</SelectItem>
+                            <SelectItem value="date">Fecha</SelectItem>
+                            <SelectItem value="json">JSON</SelectItem>
+                            <SelectItem value="null">NULL</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500"
+                          onClick={() => {
+                            const newCols = (config.updateColumns || []).filter((_: any, idx: number) => idx !== i)
+                            updateConfig("updateColumns", newCols)
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Vista previa del UPDATE */}
+                {(config.updateColumns || []).some((c: any) => c.column) && config.whereClause && (
+                  <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                    <p className="text-xs font-medium text-foreground mb-2">Vista previa SQL:</p>
+                    <code className="text-[11px] font-mono text-muted-foreground block whitespace-pre-wrap">
+                      UPDATE {config.tableName}{"\n"}
+                      SET {(config.updateColumns || []).filter((c: any) => c.column).map((c: any) => 
+                        `${c.column} = ${c.type === "string" ? `'${c.value}'` : c.value}`
+                      ).join(", ")}{"\n"}
+                      WHERE {config.whereClause}
+                    </code>
+                  </div>
+                )}
+              </div>
+            )}
+
             {config.dbOperation === "custom" && (
               <div className="space-y-2">
                 <Label className="text-foreground">Query SQL</Label>

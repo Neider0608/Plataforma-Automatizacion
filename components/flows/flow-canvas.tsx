@@ -320,6 +320,47 @@ export function FlowCanvas({
                       </span>
                     </div>
                   )}
+                  {/* Mostrar columnas para INSERT */}
+                  {node.type === "action" && node.config.actionType === "database" && node.config.dbOperation === "insert" && node.config.insertColumns?.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[9px] text-muted-foreground">Columnas:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {node.config.insertColumns.filter((c: any) => c.column).slice(0, 3).map((col: any, i: number) => (
+                          <code key={i} className="text-[9px] bg-green-500/10 text-green-600 px-1 py-0.5 rounded font-mono">
+                            {col.column}
+                          </code>
+                        ))}
+                        {node.config.insertColumns.filter((c: any) => c.column).length > 3 && (
+                          <span className="text-[9px] text-muted-foreground">+{node.config.insertColumns.filter((c: any) => c.column).length - 3}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* Mostrar columnas para UPDATE */}
+                  {node.type === "action" && node.config.actionType === "database" && node.config.dbOperation === "update" && node.config.updateColumns?.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[9px] text-muted-foreground">Actualiza:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {node.config.updateColumns.filter((c: any) => c.column).slice(0, 3).map((col: any, i: number) => (
+                          <code key={i} className="text-[9px] bg-yellow-500/10 text-yellow-600 px-1 py-0.5 rounded font-mono">
+                            {col.column}={col.value?.includes("{{") ? "var" : "..."}
+                          </code>
+                        ))}
+                        {node.config.updateColumns.filter((c: any) => c.column).length > 3 && (
+                          <span className="text-[9px] text-muted-foreground">+{node.config.updateColumns.filter((c: any) => c.column).length - 3}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* Mostrar columnas para SELECT */}
+                  {node.type === "action" && node.config.actionType === "database" && node.config.dbOperation === "select" && node.config.selectColumns && node.config.selectColumns !== "*" && (
+                    <div className="space-y-1">
+                      <p className="text-[9px] text-muted-foreground">Columnas:</p>
+                      <code className="text-[9px] bg-blue-500/10 text-blue-500 px-1 py-0.5 rounded font-mono block truncate">
+                        {node.config.selectColumns}
+                      </code>
+                    </div>
+                  )}
                   {node.type === "action" && node.config.actionType === "database" && node.config.whereClause && (
                     <code className="text-[10px] bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded block truncate font-mono">
                       WHERE {node.config.whereClause}
