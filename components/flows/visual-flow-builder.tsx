@@ -299,6 +299,7 @@ export function VisualFlowBuilder() {
           if (!open) setNodeToEdit(null)
         }}
         node={nodeToEdit}
+        allNodes={nodes}
         onUpdateNode={handleUpdateNode}
         onDeleteNode={handleDeleteNode}
       />

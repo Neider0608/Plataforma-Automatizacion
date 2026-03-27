@@ -2,8 +2,9 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { Zap, Database, Mail, GitBranch, CheckCircle, Plus } from "lucide-react"
+import { Zap, Database, Mail, GitBranch, CheckCircle, Plus, ArrowRight, Globe, Clock, Code, FileText } from "lucide-react"
 import type { Node } from "./visual-flow-builder"
+import { Badge } from "@/components/ui/badge"
 
 export function FlowCanvas({
   nodes,
@@ -88,12 +89,26 @@ export function FlowCanvas({
     }
   }
 
-  const getIcon = (type: string) => {
+  const getIcon = (type: string, config?: any) => {
+    if (type === "trigger") {
+      switch (config?.triggerType) {
+        case "webhook": return <Globe className="h-5 w-5" />
+        case "schedule": return <Clock className="h-5 w-5" />
+        case "email": return <Mail className="h-5 w-5" />
+        case "database": return <Database className="h-5 w-5" />
+        default: return <Zap className="h-5 w-5" />
+      }
+    }
+    if (type === "action") {
+      switch (config?.actionType) {
+        case "http": return <Globe className="h-5 w-5" />
+        case "database": return <Database className="h-5 w-5" />
+        case "email": return <Mail className="h-5 w-5" />
+        case "transform": return <Code className="h-5 w-5" />
+        default: return <Database className="h-5 w-5" />
+      }
+    }
     switch (type) {
-      case "trigger":
-        return <Zap className="h-5 w-5" />
-      case "action":
-        return <Database className="h-5 w-5" />
       case "condition":
         return <GitBranch className="h-5 w-5" />
       case "output":
@@ -101,6 +116,50 @@ export function FlowCanvas({
       default:
         return <CheckCircle className="h-5 w-5" />
     }
+  }
+
+  // Obtener informacion de la fuente de datos del nodo
+  const getDataSourceInfo = (node: Node, index: number) => {
+    if (node.type === "trigger") {
+      switch (node.config?.triggerType) {
+        case "webhook":
+          return { label: "HTTP Request", vars: ["body", "headers", "query"] }
+        case "email":
+          return { label: "Email entrante", vars: ["from", "subject", "body"] }
+        case "schedule":
+          return { label: `Cron: ${node.config?.cronExpression || "* * * * *"}`, vars: ["executionTime"] }
+        case "database":
+          return { label: `Tabla: ${node.config?.dbTable || "tabla"}`, vars: ["newData", "oldData"] }
+        default:
+          return null
+      }
+    }
+    
+    if (index > 0 && (node.type === "action" || node.type === "condition" || node.type === "output")) {
+      const prevNode = nodes[index - 1]
+      return { 
+        label: `Datos de: ${prevNode?.label || "Nodo anterior"}`,
+        from: prevNode?.id
+      }
+    }
+    
+    return null
+  }
+
+  // Obtener que variables produce este nodo
+  const getOutputVars = (node: Node) => {
+    if (node.type === "action") {
+      switch (node.config?.actionType) {
+        case "http": return ["response.data", "response.status"]
+        case "database": return ["result.rows", "result.rowCount"]
+        case "transform": return ["output"]
+        default: return []
+      }
+    }
+    if (node.type === "condition") {
+      return ["result (true/false)"]
+    }
+    return []
   }
 
   return (
@@ -163,9 +222,11 @@ export function FlowCanvas({
       )}
 
       {/* Nodes */}
-      {nodes.map((node) => {
+      {nodes.map((node, index) => {
         const isActive = isTestMode && activeNode === node.id
         const isDragging = draggedNode === node.id
+        const dataSource = getDataSourceInfo(node, index)
+        const outputVars = getOutputVars(node)
 
         return (
           <div
@@ -178,23 +239,91 @@ export function FlowCanvas({
             onDoubleClick={() => handleNodeDoubleClick(node.id)}
             onMouseDown={(e) => handleMouseDown(e, node.id)}
           >
+            {/* Indicador de fuente de datos */}
+            {dataSource && (
+              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+                <div className="flex items-center gap-1 text-[10px] text-muted-foreground bg-background/80 px-2 py-0.5 rounded-full border border-border">
+                  <ArrowRight className="h-2.5 w-2.5" />
+                  <span>{dataSource.label}</span>
+                </div>
+              </div>
+            )}
+            
             <div
-              className={`glass rounded-lg p-4 min-w-[200px] border-2 ${
+              className={`glass rounded-lg p-4 min-w-[220px] max-w-[280px] border-2 ${
                 selectedNode === node.id || isActive ? "border-primary neon-glow" : "border-border"
               } hover:border-primary/50 transition-colors ${isActive ? "bg-primary/20" : ""}`}
             >
               <div className="flex items-center gap-3">
                 <div className={`flex items-center justify-center w-10 h-10 rounded-lg ${node.color}/20`}>
-                  <div className={`${node.color.replace("bg-", "text-")}`}>{getIcon(node.type)}</div>
+                  <div className={`${node.color.replace("bg-", "text-")}`}>{getIcon(node.type, node.config)}</div>
                 </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-foreground text-sm">{node.label}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground text-sm truncate">{node.label}</p>
                   <p className="text-xs text-muted-foreground capitalize">{node.type}</p>
-                  {node.description && (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{node.description}</p>
-                  )}
                 </div>
               </div>
+              
+              {/* Mostrar variables de entrada si no es trigger */}
+              {node.type !== "trigger" && dataSource?.from && (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <p className="text-[10px] text-muted-foreground mb-1">Entrada:</p>
+                  <code className="text-[10px] bg-muted/30 px-1.5 py-0.5 rounded text-primary/80 font-mono">
+                    {`{{${dataSource.from}.output}}`}
+                  </code>
+                </div>
+              )}
+              
+              {/* Mostrar configuracion clave segun tipo */}
+              {node.config && (
+                <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                  {node.type === "action" && node.config.actionType === "database" && node.config.tableName && (
+                    <div className="flex items-center gap-1">
+                      <Database className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-[10px] text-muted-foreground">
+                        {node.config.dbOperation?.toUpperCase()} {node.config.tableName}
+                      </span>
+                    </div>
+                  )}
+                  {node.type === "action" && node.config.actionType === "database" && node.config.whereClause && (
+                    <code className="text-[10px] bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded block truncate font-mono">
+                      WHERE {node.config.whereClause}
+                    </code>
+                  )}
+                  {node.type === "action" && node.config.actionType === "http" && node.config.endpoint && (
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className="text-[9px] px-1 py-0">
+                        {node.config.httpMethod || "GET"}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground truncate">
+                        {node.config.endpoint.replace(/^https?:\/\//, "").substring(0, 25)}...
+                      </span>
+                    </div>
+                  )}
+                  {node.type === "condition" && node.config.field && (
+                    <code className="text-[10px] bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded block truncate font-mono">
+                      {node.config.field} {node.config.operator} {node.config.value}
+                    </code>
+                  )}
+                </div>
+              )}
+              
+              {/* Variables que produce este nodo */}
+              {outputVars.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <p className="text-[10px] text-muted-foreground mb-1">Produce:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {outputVars.slice(0, 2).map((v, i) => (
+                      <code key={i} className="text-[9px] bg-green-500/10 text-green-600 px-1 py-0.5 rounded font-mono">
+                        {v}
+                      </code>
+                    ))}
+                    {outputVars.length > 2 && (
+                      <span className="text-[9px] text-muted-foreground">+{outputVars.length - 2}</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             {selectedNode === node.id && !isTestMode && (
               <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-muted-foreground whitespace-nowrap">

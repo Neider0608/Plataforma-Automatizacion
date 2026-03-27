@@ -47,7 +47,7 @@ export const flowsData: FlowData[] = [
         y: 40,
         color: "bg-yellow-500",
         description: "Verifica si el cliente ya existe en la base de datos",
-        config: { field: "customer.exists", operator: "equals", value: "true" }
+        config: { field: "n1-2.result.exists", operator: "equals", value: "true" }
       },
       {
         id: "n1-4",
@@ -57,7 +57,13 @@ export const flowsData: FlowData[] = [
         y: 55,
         color: "bg-secondary",
         description: "Actualiza los datos del cliente existente",
-        config: { actionType: "database", dbOperation: "update", tableName: "customers" }
+        config: { 
+          actionType: "database", 
+          dbOperation: "update", 
+          tableName: "customers",
+          whereClause: "id = {{trigger.body.customerId}}",
+          dbCredentialId: "cred-3"
+        }
       },
       {
         id: "n1-5",
@@ -67,7 +73,12 @@ export const flowsData: FlowData[] = [
         y: 55,
         color: "bg-secondary",
         description: "Crea un nuevo registro de cliente",
-        config: { actionType: "database", dbOperation: "insert", tableName: "customers" }
+        config: { 
+          actionType: "database", 
+          dbOperation: "insert", 
+          tableName: "customers",
+          dbCredentialId: "cred-3"
+        }
       },
       {
         id: "n1-6",

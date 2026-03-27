@@ -22,6 +22,58 @@ import {
   type Credential
 } from "@/lib/credentials-store"
 
+// Definicion de variables disponibles por tipo de nodo/trigger
+const variablesByTriggerType: Record<string, { name: string; path: string; type: string; description: string }[]> = {
+  webhook: [
+    { name: "body", path: "trigger.body", type: "object", description: "Cuerpo del request HTTP recibido" },
+    { name: "headers", path: "trigger.headers", type: "object", description: "Headers del request" },
+    { name: "method", path: "trigger.method", type: "string", description: "Metodo HTTP (GET, POST, etc)" },
+    { name: "query", path: "trigger.query", type: "object", description: "Parametros de query string" },
+    { name: "url", path: "trigger.url", type: "string", description: "URL completa del request" },
+  ],
+  email: [
+    { name: "from", path: "trigger.email.from", type: "string", description: "Remitente del email" },
+    { name: "to", path: "trigger.email.to", type: "string", description: "Destinatario del email" },
+    { name: "subject", path: "trigger.email.subject", type: "string", description: "Asunto del email" },
+    { name: "body", path: "trigger.email.body", type: "string", description: "Cuerpo del email en texto" },
+    { name: "html", path: "trigger.email.html", type: "string", description: "Cuerpo del email en HTML" },
+    { name: "attachments", path: "trigger.email.attachments", type: "array", description: "Archivos adjuntos" },
+    { name: "date", path: "trigger.email.date", type: "date", description: "Fecha de recepcion" },
+  ],
+  schedule: [
+    { name: "executionTime", path: "trigger.schedule.executionTime", type: "date", description: "Momento de ejecucion" },
+    { name: "scheduleName", path: "trigger.schedule.name", type: "string", description: "Nombre del schedule" },
+    { name: "cronExpression", path: "trigger.schedule.cron", type: "string", description: "Expresion cron configurada" },
+  ],
+  database: [
+    { name: "operation", path: "trigger.db.operation", type: "string", description: "Tipo de operacion (INSERT, UPDATE, DELETE)" },
+    { name: "table", path: "trigger.db.table", type: "string", description: "Tabla afectada" },
+    { name: "newData", path: "trigger.db.new", type: "object", description: "Datos nuevos del registro" },
+    { name: "oldData", path: "trigger.db.old", type: "object", description: "Datos anteriores del registro" },
+    { name: "primaryKey", path: "trigger.db.pk", type: "any", description: "Llave primaria del registro" },
+  ],
+}
+
+const variablesByActionType: Record<string, { name: string; path: string; type: string; description: string }[]> = {
+  http: [
+    { name: "status", path: "{{nodeId}}.response.status", type: "number", description: "Codigo de estado HTTP" },
+    { name: "data", path: "{{nodeId}}.response.data", type: "object", description: "Datos de la respuesta" },
+    { name: "headers", path: "{{nodeId}}.response.headers", type: "object", description: "Headers de respuesta" },
+  ],
+  database: [
+    { name: "rows", path: "{{nodeId}}.result.rows", type: "array", description: "Filas retornadas (SELECT)" },
+    { name: "rowCount", path: "{{nodeId}}.result.rowCount", type: "number", description: "Cantidad de filas afectadas" },
+    { name: "insertId", path: "{{nodeId}}.result.insertId", type: "number", description: "ID del registro insertado" },
+  ],
+  transform: [
+    { name: "output", path: "{{nodeId}}.output", type: "any", description: "Resultado de la transformacion" },
+  ],
+  email: [
+    { name: "messageId", path: "{{nodeId}}.result.messageId", type: "string", description: "ID del mensaje enviado" },
+    { name: "success", path: "{{nodeId}}.result.success", type: "boolean", description: "Si el envio fue exitoso" },
+  ],
+}
+
 const nodeTypes = [
   { value: "trigger", label: "Disparador", icon: Zap, color: "bg-primary" },
   { value: "action", label: "Acción", icon: Database, color: "bg-secondary" },
@@ -33,12 +85,14 @@ export function EditNodeDialog({
   open,
   onOpenChange,
   node,
+  allNodes = [],
   onUpdateNode,
   onDeleteNode,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   node: Node | null
+  allNodes?: Node[]
   onUpdateNode: (nodeId: string, nodeName: string, nodeType: string, description?: string, config?: any) => void
   onDeleteNode: (nodeId: string) => void
 }) {
@@ -96,6 +150,57 @@ export function EditNodeDialog({
       setTestingConnection(false)
       setConnectionStatus(Math.random() > 0.2 ? "success" : "error")
     }, 2000)
+  }
+
+  // Obtener el indice del nodo actual y nodos anteriores
+  const currentNodeIndex = allNodes.findIndex(n => n.id === node?.id)
+  const previousNodes = currentNodeIndex > 0 ? allNodes.slice(0, currentNodeIndex) : []
+
+  // Construir variables disponibles basadas en nodos anteriores
+  const getAvailableVariables = () => {
+    const variables: { source: string; sourceLabel: string; vars: { name: string; path: string; type: string; description: string }[] }[] = []
+    
+    previousNodes.forEach((prevNode) => {
+      if (prevNode.type === "trigger") {
+        const triggerType = prevNode.config?.triggerType
+        if (triggerType && variablesByTriggerType[triggerType]) {
+          variables.push({
+            source: prevNode.id,
+            sourceLabel: prevNode.label,
+            vars: variablesByTriggerType[triggerType],
+          })
+        }
+      } else if (prevNode.type === "action") {
+        const actionType = prevNode.config?.actionType
+        if (actionType && variablesByActionType[actionType]) {
+          variables.push({
+            source: prevNode.id,
+            sourceLabel: prevNode.label,
+            vars: variablesByActionType[actionType].map(v => ({
+              ...v,
+              path: v.path.replace("{{nodeId}}", prevNode.id),
+            })),
+          })
+        }
+      } else if (prevNode.type === "condition") {
+        variables.push({
+          source: prevNode.id,
+          sourceLabel: prevNode.label,
+          vars: [
+            { name: "result", path: `${prevNode.id}.condition.result`, type: "boolean", description: "Resultado de la condicion (true/false)" },
+            { name: "branch", path: `${prevNode.id}.condition.branch`, type: "string", description: "Rama tomada (true/false)" },
+          ],
+        })
+      }
+    })
+    
+    return variables
+  }
+
+  const availableVariables = getAvailableVariables()
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(`{{${text}}}`)
   }
 
   if (!node) return null
@@ -1166,11 +1271,12 @@ export function EditNodeDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 glass">
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="config">Configuración</TabsTrigger>
-          </TabsList>
+<Tabs defaultValue="general" className="w-full">
+  <TabsList className="grid w-full grid-cols-3 glass">
+  <TabsTrigger value="general">General</TabsTrigger>
+  <TabsTrigger value="config">Configuracion</TabsTrigger>
+  <TabsTrigger value="variables">Variables</TabsTrigger>
+  </TabsList>
 
           <TabsContent value="general" className="space-y-4 py-4">
             <div className="space-y-2">
@@ -1471,6 +1577,113 @@ return {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="variables" className="space-y-4 py-4">
+            <div className="flex items-center gap-2 text-foreground font-medium mb-4">
+              <Key className="h-4 w-4" />
+              Variables Disponibles
+            </div>
+
+            {node?.type === "trigger" ? (
+              <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+                <p className="text-sm text-foreground font-medium mb-2">Este es un nodo Trigger</p>
+                <p className="text-xs text-muted-foreground">
+                  Como nodo inicial del flujo, genera las variables que estaran disponibles para los nodos siguientes.
+                  Las variables que produce dependiendo del tipo de trigger configurado:
+                </p>
+                {config.triggerType && variablesByTriggerType[config.triggerType] && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-medium text-foreground">Variables que produce este trigger:</p>
+                    {variablesByTriggerType[config.triggerType].map((v, i) => (
+                      <div key={i} className="flex items-center justify-between p-2 rounded bg-background/50 border border-border">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <code className="text-xs bg-muted/50 px-1.5 py-0.5 rounded text-primary font-mono">
+                              {`{{${v.path}}}`}
+                            </code>
+                            <Badge variant="outline" className="text-[10px]">{v.type}</Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-1">{v.description}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => copyToClipboard(v.path)}
+                          title="Copiar variable"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : availableVariables.length === 0 ? (
+              <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                <div className="flex items-center gap-2 text-yellow-500 mb-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Sin variables disponibles</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  No hay nodos anteriores que proporcionen variables. Asegurate de tener un trigger u otros nodos antes de este.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Usa estas variables en los campos de configuracion con el formato <code className="bg-muted/30 px-1 rounded">{"{{variable.path}}"}</code>
+                </p>
+                
+                {availableVariables.map((source, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        previousNodes.find(n => n.id === source.source)?.type === "trigger" ? "bg-primary" :
+                        previousNodes.find(n => n.id === source.source)?.type === "action" ? "bg-secondary" : "bg-yellow-500"
+                      }`} />
+                      <span className="text-sm font-medium text-foreground">{source.sourceLabel}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        {previousNodes.find(n => n.id === source.source)?.type}
+                      </Badge>
+                    </div>
+                    
+                    <div className="ml-4 space-y-1.5">
+                      {source.vars.map((v, i) => (
+                        <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/20 border border-border hover:border-primary/30 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <code className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded font-mono truncate">
+                                {`{{${v.path}}}`}
+                              </code>
+                              <Badge variant="outline" className="text-[10px] shrink-0">{v.type}</Badge>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-1 truncate">{v.description}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 ml-2"
+                            onClick={() => copyToClipboard(v.path)}
+                            title="Copiar al portapapeles"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="p-3 rounded-lg bg-muted/20 border border-border">
+                  <p className="text-xs font-medium text-foreground mb-2">Ejemplo de uso:</p>
+                  <code className="text-xs bg-background/50 px-2 py-1 rounded block font-mono text-muted-foreground">
+                    SELECT * FROM usuarios WHERE id = {`{{trigger.body.userId}}`}
+                  </code>
+                </div>
               </div>
             )}
           </TabsContent>
