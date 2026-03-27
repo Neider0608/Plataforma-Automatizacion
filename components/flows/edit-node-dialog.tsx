@@ -854,13 +854,34 @@ export function EditNodeDialog({
 
             {(config.dbOperation === "select" || config.dbOperation === "update" || config.dbOperation === "delete") && (
               <div className="space-y-2">
-                <Label className="text-foreground">Condición WHERE</Label>
+                <Label className="text-foreground">Condicion WHERE</Label>
                 <Input
-                  placeholder="id = {{data.id}} AND status = 'active'"
+                  placeholder="id = {{trigger.body.userId}} AND status = 'active'"
                   value={config.whereClause || ""}
                   onChange={(e) => updateConfig("whereClause", e.target.value)}
-                  className="glass border-border bg-transparent"
+                  className="glass border-border bg-transparent font-mono text-sm"
                 />
+                <div className="p-2 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Usa variables dinamicas con la sintaxis <code className="bg-muted/30 px-1 rounded">{"{{variable.path}}"}</code>
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge 
+                      variant="outline" 
+                      className="text-[10px] cursor-pointer hover:bg-primary/20"
+                      onClick={() => updateConfig("whereClause", (config.whereClause || "") + "{{trigger.body.id}}")}
+                    >
+                      + trigger.body.id
+                    </Badge>
+                    <Badge 
+                      variant="outline" 
+                      className="text-[10px] cursor-pointer hover:bg-primary/20"
+                      onClick={() => updateConfig("whereClause", (config.whereClause || "") + "{{trigger.query.filter}}")}
+                    >
+                      + trigger.query.filter
+                    </Badge>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1116,15 +1137,33 @@ export function EditNodeDialog({
                 placeholder={
                   config.bodyType === "xml"
                     ? '<?xml version="1.0"?>\n<root>\n  <element>value</element>\n</root>'
-                    : '{\n  "key": "{{data.value}}",\n  "nombre": "{{data.nombre}}"\n}'
+                    : '{\n  "id": "{{trigger.body.userId}}",\n  "email": "{{trigger.body.email}}",\n  "timestamp": "{{trigger.body.createdAt}}"\n}'
                 }
                 value={config.body || ""}
                 onChange={(e) => updateConfig("body", e.target.value)}
                 className="glass border-border bg-transparent font-mono text-sm min-h-[150px]"
               />
-              <p className="text-xs text-muted-foreground">
-                Usa {"{{variable}}"} para insertar valores dinámicos del paso anterior
-              </p>
+              <div className="p-2 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-xs text-muted-foreground mb-2">
+                  Variables disponibles - click para insertar:
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  <Badge 
+                    variant="outline" 
+                    className="text-[10px] cursor-pointer hover:bg-primary/20"
+                    onClick={() => updateConfig("body", (config.body || "") + "{{trigger.body}}")}
+                  >
+                    + trigger.body
+                  </Badge>
+                  <Badge 
+                    variant="outline" 
+                    className="text-[10px] cursor-pointer hover:bg-primary/20"
+                    onClick={() => updateConfig("body", (config.body || "") + "{{trigger.headers}}")}
+                  >
+                    + trigger.headers
+                  </Badge>
+                </div>
+              </div>
             </AccordionContent>
           </AccordionItem>
         )}
@@ -1484,11 +1523,39 @@ return {
                 <div className="space-y-2">
                   <Label className="text-foreground">Campo a Evaluar</Label>
                   <Input
-                    placeholder="Ej: response.status, data.amount"
+                    placeholder="Ej: {{trigger.body.status}}, {{n1-2.response.data.total}}"
                     value={config.field || ""}
                     onChange={(e) => updateConfig("field", e.target.value)}
-                    className="glass border-border bg-transparent"
+                    className="glass border-border bg-transparent font-mono text-sm"
                   />
+                  <div className="p-2 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Selecciona el campo del paso anterior a evaluar:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge 
+                        variant="outline" 
+                        className="text-[10px] cursor-pointer hover:bg-primary/20"
+                        onClick={() => updateConfig("field", "{{trigger.body.status}}")}
+                      >
+                        trigger.body.status
+                      </Badge>
+                      <Badge 
+                        variant="outline" 
+                        className="text-[10px] cursor-pointer hover:bg-primary/20"
+                        onClick={() => updateConfig("field", "{{trigger.body.amount}}")}
+                      >
+                        trigger.body.amount
+                      </Badge>
+                      <Badge 
+                        variant="outline" 
+                        className="text-[10px] cursor-pointer hover:bg-primary/20"
+                        onClick={() => updateConfig("field", "{{n1-2.result.rowCount}}")}
+                      >
+                        nodo_anterior.rowCount
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-foreground">Operador</Label>
@@ -1507,9 +1574,9 @@ return {
                       <SelectItem value="notContains">No contiene</SelectItem>
                       <SelectItem value="startsWith">Empieza con</SelectItem>
                       <SelectItem value="endsWith">Termina con</SelectItem>
-                      <SelectItem value="isEmpty">Está vacío</SelectItem>
-                      <SelectItem value="isNotEmpty">No está vacío</SelectItem>
-                      <SelectItem value="regex">Expresión Regular</SelectItem>
+                      <SelectItem value="isEmpty">Esta vacio</SelectItem>
+                      <SelectItem value="isNotEmpty">No esta vacio</SelectItem>
+                      <SelectItem value="regex">Expresion Regular</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1521,7 +1588,20 @@ return {
                     onChange={(e) => updateConfig("value", e.target.value)}
                     className="glass border-border bg-transparent"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Puedes usar valores estaticos o variables dinamicas como <code className="bg-muted/30 px-1 rounded">{"{{trigger.body.expectedValue}}"}</code>
+                  </p>
                 </div>
+
+                {/* Preview de la condicion */}
+                {config.field && config.operator && (
+                  <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                    <p className="text-xs font-medium text-yellow-600 mb-1">Vista previa de la condicion:</p>
+                    <code className="text-xs font-mono text-foreground">
+                      SI {config.field} {config.operator === "equals" ? "==" : config.operator === "notEquals" ? "!=" : config.operator === "greater" ? ">" : config.operator === "less" ? "<" : config.operator} {config.value || "???"}
+                    </code>
+                  </div>
+                )}
               </div>
             )}
 

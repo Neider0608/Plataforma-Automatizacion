@@ -15,7 +15,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Copy } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Copy, Database, Globe, Mail, HardDrive, Terminal, CheckCircle2 } from "lucide-react"
+
+type AgentCapability = "database" | "http" | "email" | "file" | "script"
 
 interface AddAgentDialogProps {
   open: boolean
@@ -23,12 +27,24 @@ interface AddAgentDialogProps {
   onAddAgent: (name: string, os: string) => void
 }
 
+const capabilities: { id: AgentCapability; label: string; description: string; icon: React.ReactNode }[] = [
+  { id: "database", label: "Base de Datos", description: "Ejecutar queries SQL", icon: <Database className="h-4 w-4" /> },
+  { id: "http", label: "HTTP/API", description: "Llamadas a APIs externas", icon: <Globe className="h-4 w-4" /> },
+  { id: "email", label: "Email", description: "Envio y recepcion de emails", icon: <Mail className="h-4 w-4" /> },
+  { id: "file", label: "Archivos", description: "Lectura/escritura de archivos", icon: <HardDrive className="h-4 w-4" /> },
+  { id: "script", label: "Scripts", description: "Ejecucion de scripts personalizados", icon: <Terminal className="h-4 w-4" /> },
+]
+
 export function AddAgentDialog({ open, onOpenChange, onAddAgent }: AddAgentDialogProps) {
   const [name, setName] = useState("")
   const [os, setOs] = useState("")
+  const [selectedCapabilities, setSelectedCapabilities] = useState<AgentCapability[]>(["database", "http"])
   const [showInstructions, setShowInstructions] = useState(false)
 
-  const installCommand = `curl -fsSL https://install.automation-platform.com/agent.sh | bash -s -- --token=YOUR_TOKEN --name="${name}"`
+  const installCommand = `curl -fsSL https://install.automation-platform.com/agent.sh | bash -s -- \\
+  --token=YOUR_UNIQUE_TOKEN \\
+  --name="${name || "mi-agente"}" \\
+  --capabilities="${selectedCapabilities.join(",")}"`
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,6 +57,7 @@ export function AddAgentDialog({ open, onOpenChange, onAddAgent }: AddAgentDialo
   const handleClose = () => {
     setName("")
     setOs("")
+    setSelectedCapabilities(["database", "http"])
     setShowInstructions(false)
     onOpenChange(false)
   }
@@ -89,6 +106,46 @@ export function AddAgentDialog({ open, onOpenChange, onAddAgent }: AddAgentDialo
                 className="glass border-border focus:border-primary bg-transparent"
                 required
               />
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-foreground">Capacidades del Agente</Label>
+              <p className="text-xs text-muted-foreground">
+                Selecciona las operaciones que este agente podra ejecutar
+              </p>
+              <div className="grid grid-cols-1 gap-2">
+                {capabilities.map((cap) => (
+                  <label
+                    key={cap.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      selectedCapabilities.includes(cap.id)
+                        ? "border-primary bg-primary/10"
+                        : "border-border glass hover:border-primary/50"
+                    }`}
+                  >
+                    <Switch
+                      checked={selectedCapabilities.includes(cap.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedCapabilities([...selectedCapabilities, cap.id])
+                        } else {
+                          setSelectedCapabilities(selectedCapabilities.filter((c) => c !== cap.id))
+                        }
+                      }}
+                    />
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="text-primary">{cap.icon}</span>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{cap.label}</p>
+                        <p className="text-xs text-muted-foreground">{cap.description}</p>
+                      </div>
+                    </div>
+                    {selectedCapabilities.includes(cap.id) && (
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                    )}
+                  </label>
+                ))}
+              </div>
             </div>
 
             <DialogFooter>

@@ -137,7 +137,10 @@ export const flowsData: FlowData[] = [
         y: 18,
         color: "bg-secondary",
         description: "Extrae los archivos PDF adjuntos del email",
-        config: { actionType: "transform", transformCode: "extractAttachments(email, 'pdf')" }
+        config: { 
+          actionType: "transform", 
+          transformCode: "// Entrada: {{trigger.email.attachments}}\nconst pdfs = attachments.filter(a => a.type === 'pdf');\nreturn { files: pdfs, count: pdfs.length };"
+        }
       },
       {
         id: "n2-3",
@@ -147,7 +150,12 @@ export const flowsData: FlowData[] = [
         y: 28,
         color: "bg-secondary",
         description: "Aplica OCR para extraer texto del PDF",
-        config: { actionType: "http", httpMethod: "POST", endpoint: "https://api.ocr.com/extract" }
+        config: { 
+          actionType: "http", 
+          httpMethod: "POST", 
+          endpoint: "https://api.ocr.com/extract",
+          body: '{\n  "document": "{{n2-2.output.files[0]}}",\n  "language": "es"\n}'
+        }
       },
       {
         id: "n2-4",
@@ -157,17 +165,20 @@ export const flowsData: FlowData[] = [
         y: 38,
         color: "bg-secondary",
         description: "Extrae datos estructurados de la factura",
-        config: { actionType: "transform", transformCode: "parseInvoice(ocrText)" }
+        config: { 
+          actionType: "transform", 
+          transformCode: "// Entrada: {{n2-3.response.data.text}}\nconst nit = text.match(/NIT[:\\s]*(\\d+)/i)?.[1];\nconst total = text.match(/Total[:\\s]*\\$?([\\d,.]+)/i)?.[1];\nreturn { nit, total, fecha: new Date() };"
+        }
       },
       {
         id: "n2-5",
         type: "condition",
-        label: "Factura Válida?",
+        label: "Factura Valida?",
         x: 50,
         y: 48,
         color: "bg-yellow-500",
         description: "Verifica que la factura tenga todos los campos requeridos",
-        config: { field: "invoice.isValid", operator: "equals", value: "true" }
+        config: { field: "{{n2-4.output.nit}}", operator: "isNotEmpty", value: "" }
       },
       {
         id: "n2-6",
@@ -177,17 +188,27 @@ export const flowsData: FlowData[] = [
         y: 58,
         color: "bg-secondary",
         description: "Valida el NIT del proveedor con la DIAN",
-        config: { actionType: "http", httpMethod: "GET", endpoint: "https://api.dian.gov.co/validate" }
+        config: { 
+          actionType: "http", 
+          httpMethod: "GET", 
+          endpoint: "https://api.dian.gov.co/validate/{{n2-4.output.nit}}"
+        }
       },
       {
         id: "n2-7",
         type: "action",
-        label: "Marcar Revisión",
+        label: "Marcar Revision",
         x: 70,
         y: 58,
         color: "bg-secondary",
-        description: "Marca la factura para revisión manual",
-        config: { actionType: "database", dbOperation: "update", tableName: "invoices" }
+        description: "Marca la factura para revision manual",
+        config: { 
+          actionType: "database", 
+          dbOperation: "update", 
+          tableName: "invoices",
+          whereClause: "email_id = '{{trigger.email.messageId}}'",
+          dbCredentialId: "cred-3"
+        }
       },
       {
         id: "n2-8",
@@ -197,7 +218,12 @@ export const flowsData: FlowData[] = [
         y: 68,
         color: "bg-secondary",
         description: "Guarda la factura validada en la base de datos",
-        config: { actionType: "database", dbOperation: "insert", tableName: "invoices" }
+        config: { 
+          actionType: "database", 
+          dbOperation: "insert", 
+          tableName: "invoices",
+          dbCredentialId: "cred-3"
+        }
       },
       {
         id: "n2-9",
