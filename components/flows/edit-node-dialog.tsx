@@ -1661,22 +1661,186 @@ return {
             )}
           </TabsContent>
 
-          <TabsContent value="variables" className="space-y-4 py-4">
-            <div className="flex items-center gap-2 text-foreground font-medium mb-4">
-              <Key className="h-4 w-4" />
-              Variables Disponibles
+          <TabsContent value="variables" className="space-y-4 py-4 max-h-[400px] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-foreground font-medium">
+                <Key className="h-4 w-4" />
+                Variables
+              </div>
             </div>
 
+            {/* Seccion: Variables Personalizadas / Esperadas */}
+            <div className="space-y-3 p-4 rounded-lg border border-dashed border-primary/50 bg-primary/5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Variables Esperadas (Entrada)</p>
+                  <p className="text-xs text-muted-foreground">Define las variables que esperas recibir en este nodo</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 glass border-border"
+                  onClick={() => {
+                    const newVars = [...(config.expectedVariables || [])]
+                    newVars.push({ name: "", path: "", type: "string", description: "" })
+                    updateConfig("expectedVariables", newVars)
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                  Agregar
+                </Button>
+              </div>
+
+              {(config.expectedVariables || []).length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground text-xs">
+                  No hay variables definidas. Agrega las variables que esperas recibir de sistemas externos o del flujo anterior.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(config.expectedVariables || []).map((v: any, i: number) => (
+                    <div key={i} className="p-3 rounded-lg bg-background/50 border border-border space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="nombre_variable"
+                          value={v.name || ""}
+                          onChange={(e) => {
+                            const newVars = [...(config.expectedVariables || [])]
+                            newVars[i] = { ...newVars[i], name: e.target.value, path: `${node?.id}.input.${e.target.value}` }
+                            updateConfig("expectedVariables", newVars)
+                          }}
+                          className="glass border-border bg-transparent text-sm h-8 flex-1"
+                        />
+                        <Select
+                          value={v.type || "string"}
+                          onValueChange={(val) => {
+                            const newVars = [...(config.expectedVariables || [])]
+                            newVars[i] = { ...newVars[i], type: val }
+                            updateConfig("expectedVariables", newVars)
+                          }}
+                        >
+                          <SelectTrigger className="glass border-border bg-transparent h-8 w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="glass border-border">
+                            <SelectItem value="string">string</SelectItem>
+                            <SelectItem value="number">number</SelectItem>
+                            <SelectItem value="boolean">boolean</SelectItem>
+                            <SelectItem value="object">object</SelectItem>
+                            <SelectItem value="array">array</SelectItem>
+                            <SelectItem value="date">date</SelectItem>
+                            <SelectItem value="any">any</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                          onClick={() => {
+                            const newVars = (config.expectedVariables || []).filter((_: any, idx: number) => idx !== i)
+                            updateConfig("expectedVariables", newVars)
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Input
+                        placeholder="Descripcion (opcional) - ej: ID del usuario que realiza la accion"
+                        value={v.description || ""}
+                        onChange={(e) => {
+                          const newVars = [...(config.expectedVariables || [])]
+                          newVars[i] = { ...newVars[i], description: e.target.value }
+                          updateConfig("expectedVariables", newVars)
+                        }}
+                        className="glass border-border bg-transparent text-xs h-7"
+                      />
+                      {v.name && (
+                        <div className="flex items-center gap-2">
+                          <code className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-mono">
+                            {`{{${node?.id}.input.${v.name}}}`}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={() => copyToClipboard(`${node?.id}.input.${v.name}`)}
+                          >
+                            <Copy className="h-2.5 w-2.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Plantillas rapidas */}
+              <div className="pt-2 border-t border-border/50">
+                <p className="text-xs text-muted-foreground mb-2">Plantillas rapidas:</p>
+                <div className="flex flex-wrap gap-1">
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] cursor-pointer hover:bg-primary/20"
+                    onClick={() => {
+                      updateConfig("expectedVariables", [
+                        { name: "id", path: `${node?.id}.input.id`, type: "number", description: "ID del registro" },
+                        { name: "data", path: `${node?.id}.input.data`, type: "object", description: "Datos del registro" },
+                      ])
+                    }}
+                  >
+                    CRUD basico
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] cursor-pointer hover:bg-primary/20"
+                    onClick={() => {
+                      updateConfig("expectedVariables", [
+                        { name: "userId", path: `${node?.id}.input.userId`, type: "string", description: "ID del usuario" },
+                        { name: "email", path: `${node?.id}.input.email`, type: "string", description: "Email del usuario" },
+                        { name: "name", path: `${node?.id}.input.name`, type: "string", description: "Nombre del usuario" },
+                      ])
+                    }}
+                  >
+                    Usuario
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] cursor-pointer hover:bg-primary/20"
+                    onClick={() => {
+                      updateConfig("expectedVariables", [
+                        { name: "filters", path: `${node?.id}.input.filters`, type: "object", description: "Filtros de busqueda" },
+                        { name: "page", path: `${node?.id}.input.page`, type: "number", description: "Pagina actual" },
+                        { name: "limit", path: `${node?.id}.input.limit`, type: "number", description: "Registros por pagina" },
+                      ])
+                    }}
+                  >
+                    Paginacion
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] cursor-pointer hover:bg-primary/20"
+                    onClick={() => {
+                      updateConfig("expectedVariables", [
+                        { name: "payload", path: `${node?.id}.input.payload`, type: "any", description: "Datos del webhook" },
+                        { name: "signature", path: `${node?.id}.input.signature`, type: "string", description: "Firma de verificacion" },
+                      ])
+                    }}
+                  >
+                    Webhook
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Seccion: Variables del Flujo (anteriores) */}
             {node?.type === "trigger" ? (
               <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
                 <p className="text-sm text-foreground font-medium mb-2">Este es un nodo Trigger</p>
                 <p className="text-xs text-muted-foreground">
-                  Como nodo inicial del flujo, genera las variables que estaran disponibles para los nodos siguientes.
-                  Las variables que produce dependiendo del tipo de trigger configurado:
+                  Como nodo inicial, genera las variables base del flujo. Define arriba las variables que esperas recibir del evento externo.
                 </p>
                 {config.triggerType && variablesByTriggerType[config.triggerType] && (
                   <div className="mt-3 space-y-2">
-                    <p className="text-xs font-medium text-foreground">Variables que produce este trigger:</p>
+                    <p className="text-xs font-medium text-foreground">Variables predefinidas del tipo {config.triggerType}:</p>
                     {variablesByTriggerType[config.triggerType].map((v, i) => (
                       <div key={i} className="flex items-center justify-between p-2 rounded bg-background/50 border border-border">
                         <div className="flex-1">
@@ -1693,7 +1857,6 @@ return {
                           size="icon"
                           className="h-7 w-7"
                           onClick={() => copyToClipboard(v.path)}
-                          title="Copiar variable"
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
@@ -1702,20 +1865,11 @@ return {
                   </div>
                 )}
               </div>
-            ) : availableVariables.length === 0 ? (
-              <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                <div className="flex items-center gap-2 text-yellow-500 mb-2">
-                  <AlertCircle className="h-4 w-4" />
-                  <span className="text-sm font-medium">Sin variables disponibles</span>
-                </div>
+            ) : availableVariables.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-foreground">Variables de nodos anteriores</p>
                 <p className="text-xs text-muted-foreground">
-                  No hay nodos anteriores que proporcionen variables. Asegurate de tener un trigger u otros nodos antes de este.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  Usa estas variables en los campos de configuracion con el formato <code className="bg-muted/30 px-1 rounded">{"{{variable.path}}"}</code>
+                  Estas variables estan disponibles desde los pasos anteriores del flujo
                 </p>
                 
                 {availableVariables.map((source, idx) => (
@@ -1748,7 +1902,6 @@ return {
                             size="icon"
                             className="h-7 w-7 shrink-0 ml-2"
                             onClick={() => copyToClipboard(v.path)}
-                            title="Copiar al portapapeles"
                           >
                             <Copy className="h-3 w-3" />
                           </Button>
@@ -1757,13 +1910,98 @@ return {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
 
-                <div className="p-3 rounded-lg bg-muted/20 border border-border">
-                  <p className="text-xs font-medium text-foreground mb-2">Ejemplo de uso:</p>
-                  <code className="text-xs bg-background/50 px-2 py-1 rounded block font-mono text-muted-foreground">
-                    SELECT * FROM usuarios WHERE id = {`{{trigger.body.userId}}`}
-                  </code>
+            {/* Seccion: Variables que produce este nodo */}
+            {node?.type !== "trigger" && (
+              <div className="space-y-3 p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Variables de Salida (Output)</p>
+                    <p className="text-xs text-muted-foreground">Define las variables que este nodo producira</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 glass border-border"
+                    onClick={() => {
+                      const newVars = [...(config.outputVariables || [])]
+                      newVars.push({ name: "", type: "any", description: "" })
+                      updateConfig("outputVariables", newVars)
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Agregar
+                  </Button>
                 </div>
+
+                {(config.outputVariables || []).length === 0 ? (
+                  <div className="text-center py-3 text-muted-foreground text-xs">
+                    Define las variables de salida para que los nodos siguientes puedan usarlas
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(config.outputVariables || []).map((v: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-background/50 border border-border">
+                        <Input
+                          placeholder="nombre"
+                          value={v.name || ""}
+                          onChange={(e) => {
+                            const newVars = [...(config.outputVariables || [])]
+                            newVars[i] = { ...newVars[i], name: e.target.value }
+                            updateConfig("outputVariables", newVars)
+                          }}
+                          className="glass border-border bg-transparent text-sm h-8 flex-1"
+                        />
+                        <Select
+                          value={v.type || "any"}
+                          onValueChange={(val) => {
+                            const newVars = [...(config.outputVariables || [])]
+                            newVars[i] = { ...newVars[i], type: val }
+                            updateConfig("outputVariables", newVars)
+                          }}
+                        >
+                          <SelectTrigger className="glass border-border bg-transparent h-8 w-20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="glass border-border">
+                            <SelectItem value="string">string</SelectItem>
+                            <SelectItem value="number">number</SelectItem>
+                            <SelectItem value="boolean">boolean</SelectItem>
+                            <SelectItem value="object">object</SelectItem>
+                            <SelectItem value="array">array</SelectItem>
+                            <SelectItem value="any">any</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500"
+                          onClick={() => {
+                            const newVars = (config.outputVariables || []).filter((_: any, idx: number) => idx !== i)
+                            updateConfig("outputVariables", newVars)
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(config.outputVariables || []).some((v: any) => v.name) && (
+                  <div className="pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground mb-2">Los nodos siguientes podran usar:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {(config.outputVariables || []).filter((v: any) => v.name).map((v: any, i: number) => (
+                        <code key={i} className="text-[10px] bg-green-500/20 text-green-600 px-1.5 py-0.5 rounded font-mono">
+                          {`{{${node?.id}.output.${v.name}}}`}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>

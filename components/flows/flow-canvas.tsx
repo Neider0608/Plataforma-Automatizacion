@@ -148,6 +148,13 @@ export function FlowCanvas({
 
   // Obtener que variables produce este nodo
   const getOutputVars = (node: Node) => {
+    // Si tiene variables de salida personalizadas, usar esas
+    if (node.config?.outputVariables && node.config.outputVariables.length > 0) {
+      return node.config.outputVariables
+        .filter((v: any) => v.name)
+        .map((v: any) => v.name)
+    }
+    
     if (node.type === "action") {
       switch (node.config?.actionType) {
         case "http": return ["response.data", "response.status"]
@@ -158,6 +165,16 @@ export function FlowCanvas({
     }
     if (node.type === "condition") {
       return ["result (true/false)"]
+    }
+    return []
+  }
+
+  // Obtener variables esperadas/de entrada
+  const getExpectedVars = (node: Node) => {
+    if (node.config?.expectedVariables && node.config.expectedVariables.length > 0) {
+      return node.config.expectedVariables
+        .filter((v: any) => v.name)
+        .map((v: any) => ({ name: v.name, type: v.type }))
     }
     return []
   }
@@ -227,6 +244,7 @@ export function FlowCanvas({
         const isDragging = draggedNode === node.id
         const dataSource = getDataSourceInfo(node, index)
         const outputVars = getOutputVars(node)
+        const expectedVars = getExpectedVars(node)
 
         return (
           <div
@@ -264,8 +282,25 @@ export function FlowCanvas({
                 </div>
               </div>
               
-              {/* Mostrar variables de entrada si no es trigger */}
-              {node.type !== "trigger" && dataSource?.from && (
+              {/* Mostrar variables esperadas definidas por el usuario */}
+              {expectedVars.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <p className="text-[10px] text-muted-foreground mb-1">Espera recibir:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {expectedVars.slice(0, 3).map((v: any, i: number) => (
+                      <code key={i} className="text-[9px] bg-blue-500/10 text-blue-500 px-1 py-0.5 rounded font-mono">
+                        {v.name}
+                      </code>
+                    ))}
+                    {expectedVars.length > 3 && (
+                      <span className="text-[9px] text-muted-foreground">+{expectedVars.length - 3}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Mostrar variables de entrada si no es trigger y no tiene vars esperadas */}
+              {node.type !== "trigger" && dataSource?.from && expectedVars.length === 0 && (
                 <div className="mt-2 pt-2 border-t border-border/50">
                   <p className="text-[10px] text-muted-foreground mb-1">Entrada:</p>
                   <code className="text-[10px] bg-muted/30 px-1.5 py-0.5 rounded text-primary/80 font-mono">

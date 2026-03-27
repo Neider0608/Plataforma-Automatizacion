@@ -17,7 +17,52 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Copy, Database, Globe, Mail, HardDrive, Terminal, CheckCircle2 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Copy, Database, Globe, Mail, HardDrive, Terminal, CheckCircle2, Download, Laptop, Monitor } from "lucide-react"
+
+const operatingSystems = [
+  { value: "ubuntu-22", label: "Ubuntu 22.04 LTS", category: "Linux" },
+  { value: "ubuntu-20", label: "Ubuntu 20.04 LTS", category: "Linux" },
+  { value: "debian-12", label: "Debian 12", category: "Linux" },
+  { value: "debian-11", label: "Debian 11", category: "Linux" },
+  { value: "centos-9", label: "CentOS Stream 9", category: "Linux" },
+  { value: "rhel-9", label: "RHEL 9", category: "Linux" },
+  { value: "amazon-linux-2023", label: "Amazon Linux 2023", category: "Linux" },
+  { value: "windows-server-2022", label: "Windows Server 2022", category: "Windows" },
+  { value: "windows-server-2019", label: "Windows Server 2019", category: "Windows" },
+  { value: "windows-11", label: "Windows 11", category: "Windows" },
+  { value: "windows-10", label: "Windows 10", category: "Windows" },
+  { value: "macos-sonoma", label: "macOS Sonoma", category: "macOS" },
+  { value: "macos-ventura", label: "macOS Ventura", category: "macOS" },
+]
+
+const downloadLinks = {
+  linux: {
+    label: "Linux (x64)",
+    icon: <Terminal className="h-4 w-4" />,
+    filename: "agent-linux-x64.tar.gz",
+    size: "45 MB",
+  },
+  linuxArm: {
+    label: "Linux (ARM64)",
+    icon: <Terminal className="h-4 w-4" />,
+    filename: "agent-linux-arm64.tar.gz",
+    size: "42 MB",
+  },
+  windows: {
+    label: "Windows (x64)",
+    icon: <Monitor className="h-4 w-4" />,
+    filename: "agent-windows-x64.exe",
+    size: "52 MB",
+  },
+  macos: {
+    label: "macOS (Universal)",
+    icon: <Laptop className="h-4 w-4" />,
+    filename: "agent-macos-universal.pkg",
+    size: "48 MB",
+  },
+}
 
 type AgentCapability = "database" | "http" | "email" | "file" | "script"
 
@@ -95,17 +140,34 @@ export function AddAgentDialog({ open, onOpenChange, onAddAgent }: AddAgentDialo
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="new-agent-os" className="text-foreground">
+              <Label className="text-foreground">
                 Sistema Operativo
               </Label>
-              <Input
-                id="new-agent-os"
-                value={os}
-                onChange={(e) => setOs(e.target.value)}
-                placeholder="Ubuntu 22.04"
-                className="glass border-border focus:border-primary bg-transparent"
-                required
-              />
+              <Select value={os} onValueChange={setOs}>
+                <SelectTrigger className="glass border-border bg-transparent">
+                  <SelectValue placeholder="Selecciona el sistema operativo" />
+                </SelectTrigger>
+                <SelectContent className="glass border-border max-h-[300px]">
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Linux</div>
+                  {operatingSystems.filter(o => o.category === "Linux").map((osItem) => (
+                    <SelectItem key={osItem.value} value={osItem.value}>
+                      {osItem.label}
+                    </SelectItem>
+                  ))}
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t border-border mt-1 pt-2">Windows</div>
+                  {operatingSystems.filter(o => o.category === "Windows").map((osItem) => (
+                    <SelectItem key={osItem.value} value={osItem.value}>
+                      {osItem.label}
+                    </SelectItem>
+                  ))}
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t border-border mt-1 pt-2">macOS</div>
+                  {operatingSystems.filter(o => o.category === "macOS").map((osItem) => (
+                    <SelectItem key={osItem.value} value={osItem.value}>
+                      {osItem.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-3">
@@ -164,31 +226,89 @@ export function AddAgentDialog({ open, onOpenChange, onAddAgent }: AddAgentDialo
           </form>
         ) : (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-foreground">Paso 1: Ejecuta este comando en tu servidor</Label>
-              <div className="relative">
-                <Textarea
-                  value={installCommand}
-                  readOnly
-                  className="glass border-border bg-transparent font-mono text-sm pr-12"
-                  rows={3}
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="absolute top-2 right-2 hover:bg-primary/10"
-                  onClick={copyToClipboard}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <Tabs defaultValue="script" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 glass">
+                <TabsTrigger value="script">Script de Instalacion</TabsTrigger>
+                <TabsTrigger value="download">Descargar Agente</TabsTrigger>
+              </TabsList>
 
-            <div className="space-y-2">
-              <Label className="text-foreground">Paso 2: Verifica la conexión</Label>
+              <TabsContent value="script" className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label className="text-foreground">Ejecuta este comando en tu servidor</Label>
+                  <div className="relative">
+                    <Textarea
+                      value={installCommand}
+                      readOnly
+                      className="glass border-border bg-transparent font-mono text-sm pr-12"
+                      rows={4}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="absolute top-2 right-2 hover:bg-primary/10"
+                      onClick={copyToClipboard}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Este script descargara e instalara el agente automaticamente
+                  </p>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="download" className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label className="text-foreground">Descarga el instalador para tu plataforma</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(downloadLinks).map(([key, download]) => (
+                      <Button
+                        key={key}
+                        variant="outline"
+                        className="glass border-border h-auto py-3 px-4 flex flex-col items-start gap-1 hover:border-primary"
+                        onClick={() => {
+                          // Simular descarga
+                          const link = document.createElement("a")
+                          link.href = `#download-${download.filename}`
+                          link.download = download.filename
+                          alert(`Descargando ${download.filename}...`)
+                        }}
+                      >
+                        <div className="flex items-center gap-2 text-foreground">
+                          {download.icon}
+                          <span className="font-medium">{download.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Download className="h-3 w-3" />
+                          <span>{download.filename}</span>
+                          <Badge variant="outline" className="text-[10px] px-1">{download.size}</Badge>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-muted/20 border border-border">
+                  <p className="text-xs text-muted-foreground">
+                    Despues de descargar, ejecuta el instalador y usa este token de configuracion:
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <code className="flex-1 text-xs bg-background/50 px-2 py-1 rounded font-mono text-primary">
+                      YOUR_UNIQUE_TOKEN
+                    </code>
+                    <Button size="sm" variant="ghost" className="h-7" onClick={() => navigator.clipboard.writeText("YOUR_UNIQUE_TOKEN")}>
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+
+            <div className="space-y-2 pt-2 border-t border-border">
+              <Label className="text-foreground">Verificacion de conexion</Label>
               <p className="text-sm text-muted-foreground">
-                Una vez instalado, el agente aparecerá en la lista con estado "Conectado"
+                Una vez instalado, el agente aparecera en la lista con estado &quot;Conectado&quot;
               </p>
             </div>
 
