@@ -8,34 +8,25 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Zap, Database, GitBranch, Mail, Trash2, Settings, Plus, Key, ExternalLink, CheckCircle2 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import {
+  Zap, Database, GitBranch, Mail, Trash2, Settings, Plus, Key, ExternalLink, CheckCircle2,
+  Globe, FileJson, FileCode, Server, Shield, Lock, AlertCircle, Copy, Eye, EyeOff
+} from "lucide-react"
 import type { Node } from "./visual-flow-builder"
+import {
+  getCredentialsByType, emailProviders, databaseProviders, httpAuthTypes,
+  type Credential
+} from "@/lib/credentials-store"
 
 const nodeTypes = [
   { value: "trigger", label: "Disparador", icon: Zap, color: "bg-primary" },
-  { value: "action", label: "Accion", icon: Database, color: "bg-secondary" },
-  { value: "condition", label: "Condicion", icon: GitBranch, color: "bg-yellow-500" },
+  { value: "action", label: "Acción", icon: Database, color: "bg-secondary" },
+  { value: "condition", label: "Condición", icon: GitBranch, color: "bg-yellow-500" },
   { value: "output", label: "Salida", icon: Mail, color: "bg-green-500" },
-]
-
-const emailProviders = [
-  { id: "gmail", name: "Gmail", icon: "https://www.google.com/favicon.ico", color: "bg-red-500" },
-  { id: "outlook", name: "Outlook / Office 365", icon: "https://outlook.live.com/favicon.ico", color: "bg-blue-500" },
-  { id: "yahoo", name: "Yahoo Mail", icon: "https://www.yahoo.com/favicon.ico", color: "bg-purple-500" },
-  { id: "imap", name: "IMAP / SMTP Custom", icon: null, color: "bg-gray-500" },
-]
-
-interface EmailCredential {
-  id: string
-  name: string
-  provider: string
-  email: string
-  connected: boolean
-}
-
-const mockEmailCredentials: EmailCredential[] = [
-  { id: "1", name: "Gmail Principal", provider: "gmail", email: "usuario@gmail.com", connected: true },
-  { id: "2", name: "Outlook Empresa", provider: "outlook", email: "usuario@empresa.com", connected: true },
 ]
 
 export function EditNodeDialog({
@@ -55,10 +46,17 @@ export function EditNodeDialog({
   const [nodeType, setNodeType] = useState("")
   const [description, setDescription] = useState("")
   const [config, setConfig] = useState<Record<string, any>>({})
+  const [showPassword, setShowPassword] = useState(false)
   const [showAddCredential, setShowAddCredential] = useState(false)
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
-  const [credentials, setCredentials] = useState<EmailCredential[]>(mockEmailCredentials)
-  const [connectingProvider, setConnectingProvider] = useState<string | null>(null)
+  const [newCredentialStep, setNewCredentialStep] = useState(1)
+  const [newCredentialConfig, setNewCredentialConfig] = useState<Record<string, any>>({})
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<"idle" | "success" | "error">("idle")
+
+  // Obtener credenciales disponibles
+  const emailCredentials = getCredentialsByType("email")
+  const databaseCredentials = getCredentialsByType("database")
+  const apiCredentials = getCredentialsByType("api")
 
   useEffect(() => {
     if (node && open) {
@@ -67,7 +65,9 @@ export function EditNodeDialog({
       setDescription(node.description || "")
       setConfig(node.config || {})
       setShowAddCredential(false)
-      setSelectedProvider(null)
+      setNewCredentialStep(1)
+      setNewCredentialConfig({})
+      setConnectionStatus("idle")
     }
   }, [node, open])
 
@@ -89,46 +89,1087 @@ export function EditNodeDialog({
     setConfig((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleConnectProvider = (providerId: string) => {
-    setConnectingProvider(providerId)
-    // Simular conexión OAuth
+  const testConnection = () => {
+    setTestingConnection(true)
+    setConnectionStatus("idle")
     setTimeout(() => {
-      const newCredential: EmailCredential = {
-        id: Date.now().toString(),
-        name: `${emailProviders.find(p => p.id === providerId)?.name} - Nueva cuenta`,
-        provider: providerId,
-        email: `nuevo@${providerId}.com`,
-        connected: true,
-      }
-      setCredentials(prev => [...prev, newCredential])
-      updateConfig("emailCredentialId", newCredential.id)
-      setConnectingProvider(null)
-      setShowAddCredential(false)
-      setSelectedProvider(null)
+      setTestingConnection(false)
+      setConnectionStatus(Math.random() > 0.2 ? "success" : "error")
     }, 2000)
   }
 
   if (!node) return null
 
-  const requiresEmailAuth =
-    (nodeType === "trigger" && config.triggerType === "email") ||
-    (nodeType === "action" && config.actionType === "email") ||
-    (nodeType === "output" && config.outputType === "email")
+  // Renderizar configuración de email completa
+  const renderEmailConfig = () => {
+    const selectedCredential = emailCredentials.find((c) => c.id === config.emailCredentialId)
+
+    if (showAddCredential) {
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-foreground">Nueva Conexión de Email</h4>
+            <Button variant="ghost" size="sm" onClick={() => setShowAddCredential(false)}>
+              Cancelar
+            </Button>
+          </div>
+
+          {newCredentialStep === 1 && (
+            <div className="space-y-3">
+              <Label className="text-foreground">Selecciona el proveedor</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {emailProviders.map((provider) => (
+                  <Card
+                    key={provider.id}
+                    className={`p-4 cursor-pointer transition-all border-2 ${
+                      newCredentialConfig.provider === provider.id
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                    onClick={() => {
+                      setNewCredentialConfig({ provider: provider.id, authType: provider.authType })
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg ${provider.color} flex items-center justify-center`}>
+                        <Mail className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{provider.name}</p>
+                        <p className="text-xs text-muted-foreground">{provider.description}</p>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+              <Button
+                className="w-full mt-4"
+                disabled={!newCredentialConfig.provider}
+                onClick={() => setNewCredentialStep(2)}
+              >
+                Continuar
+              </Button>
+            </div>
+          )}
+
+          {newCredentialStep === 2 && newCredentialConfig.provider === "imap" && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <h5 className="font-medium text-foreground mb-2">Configuración IMAP (Recepción)</h5>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Servidor IMAP</Label>
+                    <Input
+                      placeholder="imap.servidor.com"
+                      value={newCredentialConfig.imapHost || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, imapHost: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Puerto</Label>
+                    <Input
+                      placeholder="993"
+                      type="number"
+                      value={newCredentialConfig.imapPort || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, imapPort: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <h5 className="font-medium text-foreground mb-2">Configuración SMTP (Envío)</h5>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Servidor SMTP</Label>
+                    <Input
+                      placeholder="smtp.servidor.com"
+                      value={newCredentialConfig.smtpHost || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, smtpHost: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Puerto</Label>
+                    <Input
+                      placeholder="587"
+                      type="number"
+                      value={newCredentialConfig.smtpPort || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, smtpPort: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <h5 className="font-medium text-foreground mb-2">Credenciales</h5>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Email / Usuario</Label>
+                    <Input
+                      placeholder="usuario@dominio.com"
+                      value={newCredentialConfig.username || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, username: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Contraseña</Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="********"
+                        value={newCredentialConfig.password || ""}
+                        onChange={(e) => setNewCredentialConfig((p) => ({ ...p, password: e.target.value }))}
+                        className="glass border-border bg-transparent pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-foreground">Usar SSL/TLS</span>
+                </div>
+                <Switch
+                  checked={newCredentialConfig.useSSL !== false}
+                  onCheckedChange={(checked) => setNewCredentialConfig((p) => ({ ...p, useSSL: checked }))}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setNewCredentialStep(1)}>
+                  Atrás
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={testConnection}
+                  disabled={testingConnection}
+                >
+                  {testingConnection ? "Probando..." : "Probar Conexión"}
+                </Button>
+              </div>
+
+              {connectionStatus === "success" && (
+                <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/30 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-sm text-green-500">Conexión exitosa</span>
+                </div>
+              )}
+
+              {connectionStatus === "error" && (
+                <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-sm text-red-500">Error de conexión. Verifica las credenciales.</span>
+                </div>
+              )}
+
+              {connectionStatus === "success" && (
+                <Button
+                  className="w-full bg-primary hover:bg-primary/90"
+                  onClick={() => {
+                    updateConfig("emailCredentialId", `new-${Date.now()}`)
+                    updateConfig("emailConfig", newCredentialConfig)
+                    setShowAddCredential(false)
+                  }}
+                >
+                  Guardar y Usar Esta Conexión
+                </Button>
+              )}
+            </div>
+          )}
+
+          {newCredentialStep === 2 && newCredentialConfig.provider !== "imap" && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+                <h5 className="font-medium text-foreground mb-2">Configuración OAuth 2.0</h5>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Para conectar con {emailProviders.find((p) => p.id === newCredentialConfig.provider)?.name},
+                  necesitas configurar una aplicación OAuth.
+                </p>
+
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Client ID</Label>
+                    <Input
+                      placeholder="Tu Client ID de la aplicación"
+                      value={newCredentialConfig.clientId || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, clientId: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Client Secret</Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Tu Client Secret"
+                        value={newCredentialConfig.clientSecret || ""}
+                        onChange={(e) => setNewCredentialConfig((p) => ({ ...p, clientSecret: e.target.value }))}
+                        className="glass border-border bg-transparent pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-muted/20 border border-border">
+                    <p className="text-xs text-muted-foreground mb-2">URL de Callback (copia esto en tu app OAuth):</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs bg-muted/30 p-2 rounded">
+                        https://tudominio.com/api/oauth/callback
+                      </code>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setNewCredentialStep(1)}>
+                  Atrás
+                </Button>
+                <Button
+                  className="flex-1 bg-primary hover:bg-primary/90"
+                  disabled={!newCredentialConfig.clientId || !newCredentialConfig.clientSecret}
+                  onClick={() => {
+                    updateConfig("emailCredentialId", `new-${Date.now()}`)
+                    updateConfig("emailConfig", newCredentialConfig)
+                    setShowAddCredential(false)
+                  }}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Autorizar con {emailProviders.find((p) => p.id === newCredentialConfig.provider)?.name}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-foreground">Cuenta de Email</Label>
+          {emailCredentials.length > 0 ? (
+            <Select
+              value={config.emailCredentialId || ""}
+              onValueChange={(v) => updateConfig("emailCredentialId", v)}
+            >
+              <SelectTrigger className="glass border-border bg-transparent">
+                <SelectValue placeholder="Selecciona una cuenta" />
+              </SelectTrigger>
+              <SelectContent className="glass border-border">
+                {emailCredentials.map((cred) => (
+                  <SelectItem key={cred.id} value={cred.id}>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" />
+                      <span>{cred.name}</span>
+                      <Badge variant="outline" className="ml-2 text-xs">
+                        {cred.provider}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm text-yellow-500">
+              No hay cuentas de email configuradas
+            </div>
+          )}
+        </div>
+
+        <Button
+          variant="outline"
+          className="w-full glass border-border bg-transparent hover:border-primary/50"
+          onClick={() => setShowAddCredential(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Agregar Nueva Cuenta de Email
+        </Button>
+
+        {selectedCredential && (
+          <div className="space-y-3 mt-4">
+            <div className="space-y-2">
+              <Label className="text-foreground">Filtro de Asunto (opcional)</Label>
+              <Input
+                placeholder="Ej: [Pedido], Factura, URGENTE"
+                value={config.subjectFilter || ""}
+                onChange={(e) => updateConfig("subjectFilter", e.target.value)}
+                className="glass border-border bg-transparent"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground">Filtro de Remitente (opcional)</Label>
+              <Input
+                placeholder="Ej: ventas@proveedor.com"
+                value={config.senderFilter || ""}
+                onChange={(e) => updateConfig("senderFilter", e.target.value)}
+                className="glass border-border bg-transparent"
+              />
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
+              <span className="text-sm text-foreground">Marcar como leído después de procesar</span>
+              <Switch
+                checked={config.markAsRead !== false}
+                onCheckedChange={(checked) => updateConfig("markAsRead", checked)}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Renderizar configuración de base de datos
+  const renderDatabaseConfig = () => {
+    if (showAddCredential) {
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-foreground">Nueva Conexión de Base de Datos</h4>
+            <Button variant="ghost" size="sm" onClick={() => setShowAddCredential(false)}>
+              Cancelar
+            </Button>
+          </div>
+
+          {newCredentialStep === 1 && (
+            <div className="space-y-3">
+              <Label className="text-foreground">Selecciona el motor de base de datos</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {databaseProviders.map((provider) => (
+                  <Card
+                    key={provider.id}
+                    className={`p-4 cursor-pointer transition-all border-2 ${
+                      newCredentialConfig.provider === provider.id
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                    onClick={() => {
+                      setNewCredentialConfig({
+                        provider: provider.id,
+                        port: provider.defaultPort,
+                        ssl: provider.supportsSSL,
+                      })
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg ${provider.color} flex items-center justify-center`}>
+                        <Database className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{provider.name}</p>
+                        <p className="text-xs text-muted-foreground">Puerto: {provider.defaultPort}</p>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+              <Button
+                className="w-full mt-4"
+                disabled={!newCredentialConfig.provider}
+                onClick={() => setNewCredentialStep(2)}
+              >
+                Continuar
+              </Button>
+            </div>
+          )}
+
+          {newCredentialStep === 2 && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <h5 className="font-medium text-foreground mb-3">Conexión al Servidor</h5>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2 space-y-2">
+                    <Label className="text-sm">Host / IP</Label>
+                    <Input
+                      placeholder="localhost o db.servidor.com"
+                      value={newCredentialConfig.host || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, host: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Puerto</Label>
+                    <Input
+                      type="number"
+                      value={newCredentialConfig.port || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, port: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <Label className="text-sm">Nombre de la Base de Datos</Label>
+                  <Input
+                    placeholder="mi_base_datos"
+                    value={newCredentialConfig.database || ""}
+                    onChange={(e) => setNewCredentialConfig((p) => ({ ...p, database: e.target.value }))}
+                    className="glass border-border bg-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <h5 className="font-medium text-foreground mb-3">Autenticación</h5>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Usuario</Label>
+                    <Input
+                      placeholder="admin"
+                      value={newCredentialConfig.username || ""}
+                      onChange={(e) => setNewCredentialConfig((p) => ({ ...p, username: e.target.value }))}
+                      className="glass border-border bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Contraseña</Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="********"
+                        value={newCredentialConfig.password || ""}
+                        onChange={(e) => setNewCredentialConfig((p) => ({ ...p, password: e.target.value }))}
+                        className="glass border-border bg-transparent pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <h5 className="font-medium text-foreground mb-3 flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  Seguridad SSL/TLS
+                </h5>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-foreground">Habilitar SSL</span>
+                    <Switch
+                      checked={newCredentialConfig.ssl !== false}
+                      onCheckedChange={(checked) => setNewCredentialConfig((p) => ({ ...p, ssl: checked }))}
+                    />
+                  </div>
+                  {newCredentialConfig.ssl && (
+                    <div className="space-y-2">
+                      <Label className="text-sm">Modo SSL</Label>
+                      <Select
+                        value={newCredentialConfig.sslMode || "require"}
+                        onValueChange={(v) => setNewCredentialConfig((p) => ({ ...p, sslMode: v }))}
+                      >
+                        <SelectTrigger className="glass border-border bg-transparent">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="glass border-border">
+                          <SelectItem value="disable">Deshabilitado</SelectItem>
+                          <SelectItem value="allow">Permitir</SelectItem>
+                          <SelectItem value="prefer">Preferir</SelectItem>
+                          <SelectItem value="require">Requerido</SelectItem>
+                          <SelectItem value="verify-ca">Verificar CA</SelectItem>
+                          <SelectItem value="verify-full">Verificación Completa</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {newCredentialConfig.ssl && (
+                    <div className="space-y-2">
+                      <Label className="text-sm">Certificado CA (opcional)</Label>
+                      <Textarea
+                        placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                        value={newCredentialConfig.caCert || ""}
+                        onChange={(e) => setNewCredentialConfig((p) => ({ ...p, caCert: e.target.value }))}
+                        className="glass border-border bg-transparent font-mono text-xs min-h-[80px]"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setNewCredentialStep(1)}>
+                  Atrás
+                </Button>
+                <Button className="flex-1" onClick={testConnection} disabled={testingConnection}>
+                  {testingConnection ? "Probando..." : "Probar Conexión"}
+                </Button>
+              </div>
+
+              {connectionStatus === "success" && (
+                <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/30 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-sm text-green-500">Conexión exitosa</span>
+                </div>
+              )}
+
+              {connectionStatus === "error" && (
+                <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-sm text-red-500">Error de conexión. Verifica los datos.</span>
+                </div>
+              )}
+
+              {connectionStatus === "success" && (
+                <Button
+                  className="w-full bg-primary hover:bg-primary/90"
+                  onClick={() => {
+                    updateConfig("dbCredentialId", `new-${Date.now()}`)
+                    updateConfig("dbConfig", newCredentialConfig)
+                    setShowAddCredential(false)
+                  }}
+                >
+                  Guardar y Usar Esta Conexión
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-foreground">Conexión de Base de Datos</Label>
+          {databaseCredentials.length > 0 ? (
+            <Select
+              value={config.dbCredentialId || ""}
+              onValueChange={(v) => updateConfig("dbCredentialId", v)}
+            >
+              <SelectTrigger className="glass border-border bg-transparent">
+                <SelectValue placeholder="Selecciona una conexión" />
+              </SelectTrigger>
+              <SelectContent className="glass border-border">
+                {databaseCredentials.map((cred) => (
+                  <SelectItem key={cred.id} value={cred.id}>
+                    <div className="flex items-center gap-2">
+                      <Database className="h-4 w-4" />
+                      <span>{cred.name}</span>
+                      <Badge variant="outline" className="ml-2 text-xs">
+                        {cred.provider}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm text-yellow-500">
+              No hay conexiones de base de datos configuradas
+            </div>
+          )}
+        </div>
+
+        <Button
+          variant="outline"
+          className="w-full glass border-border bg-transparent hover:border-primary/50"
+          onClick={() => setShowAddCredential(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Agregar Nueva Conexión
+        </Button>
+
+        {config.dbCredentialId && (
+          <div className="space-y-3 mt-4">
+            <div className="space-y-2">
+              <Label className="text-foreground">Operación</Label>
+              <Select value={config.dbOperation || ""} onValueChange={(v) => updateConfig("dbOperation", v)}>
+                <SelectTrigger className="glass border-border bg-transparent">
+                  <SelectValue placeholder="Selecciona operación" />
+                </SelectTrigger>
+                <SelectContent className="glass border-border">
+                  <SelectItem value="select">SELECT - Consultar datos</SelectItem>
+                  <SelectItem value="insert">INSERT - Insertar registros</SelectItem>
+                  <SelectItem value="update">UPDATE - Actualizar registros</SelectItem>
+                  <SelectItem value="delete">DELETE - Eliminar registros</SelectItem>
+                  <SelectItem value="custom">Query SQL personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {config.dbOperation !== "custom" && (
+              <div className="space-y-2">
+                <Label className="text-foreground">Tabla</Label>
+                <Input
+                  placeholder="nombre_tabla"
+                  value={config.tableName || ""}
+                  onChange={(e) => updateConfig("tableName", e.target.value)}
+                  className="glass border-border bg-transparent"
+                />
+              </div>
+            )}
+
+            {config.dbOperation === "custom" && (
+              <div className="space-y-2">
+                <Label className="text-foreground">Query SQL</Label>
+                <Textarea
+                  placeholder="SELECT * FROM usuarios WHERE id = {{data.userId}}"
+                  value={config.customQuery || ""}
+                  onChange={(e) => updateConfig("customQuery", e.target.value)}
+                  className="glass border-border bg-transparent font-mono text-sm min-h-[100px]"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Usa {"{{variable}}"} para insertar valores dinámicos
+                </p>
+              </div>
+            )}
+
+            {(config.dbOperation === "select" || config.dbOperation === "update" || config.dbOperation === "delete") && (
+              <div className="space-y-2">
+                <Label className="text-foreground">Condición WHERE</Label>
+                <Input
+                  placeholder="id = {{data.id}} AND status = 'active'"
+                  value={config.whereClause || ""}
+                  onChange={(e) => updateConfig("whereClause", e.target.value)}
+                  className="glass border-border bg-transparent"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Renderizar configuración HTTP
+  const renderHttpConfig = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-4 gap-3">
+        <div className="col-span-1 space-y-2">
+          <Label className="text-foreground">Método</Label>
+          <Select value={config.httpMethod || "GET"} onValueChange={(v) => updateConfig("httpMethod", v)}>
+            <SelectTrigger className="glass border-border bg-transparent">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="glass border-border">
+              <SelectItem value="GET">GET</SelectItem>
+              <SelectItem value="POST">POST</SelectItem>
+              <SelectItem value="PUT">PUT</SelectItem>
+              <SelectItem value="PATCH">PATCH</SelectItem>
+              <SelectItem value="DELETE">DELETE</SelectItem>
+              <SelectItem value="HEAD">HEAD</SelectItem>
+              <SelectItem value="OPTIONS">OPTIONS</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="col-span-3 space-y-2">
+          <Label className="text-foreground">URL del Endpoint</Label>
+          <Input
+            placeholder="https://api.ejemplo.com/endpoint"
+            value={config.endpoint || ""}
+            onChange={(e) => updateConfig("endpoint", e.target.value)}
+            className="glass border-border bg-transparent"
+          />
+        </div>
+      </div>
+
+      <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="auth" className="border-border">
+          <AccordionTrigger className="text-foreground hover:no-underline">
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4" />
+              Autenticación
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 pt-2">
+            <div className="space-y-2">
+              <Label className="text-foreground">Tipo de Autenticación</Label>
+              <Select value={config.authType || "none"} onValueChange={(v) => updateConfig("authType", v)}>
+                <SelectTrigger className="glass border-border bg-transparent">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="glass border-border">
+                  {httpAuthTypes.map((auth) => (
+                    <SelectItem key={auth.id} value={auth.id}>
+                      <div>
+                        <span>{auth.name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">- {auth.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {config.authType === "bearer" && (
+              <div className="space-y-2">
+                <Label className="text-foreground">Token Bearer</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="eyJhbGciOiJIUzI1NiIs..."
+                    value={config.bearerToken || ""}
+                    onChange={(e) => updateConfig("bearerToken", e.target.value)}
+                    className="glass border-border bg-transparent pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {config.authType === "basic" && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Usuario</Label>
+                  <Input
+                    placeholder="usuario"
+                    value={config.basicUser || ""}
+                    onChange={(e) => updateConfig("basicUser", e.target.value)}
+                    className="glass border-border bg-transparent"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Contraseña</Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="********"
+                      value={config.basicPassword || ""}
+                      onChange={(e) => updateConfig("basicPassword", e.target.value)}
+                      className="glass border-border bg-transparent pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {config.authType === "apikey" && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Nombre del Header / Parámetro</Label>
+                  <Input
+                    placeholder="X-API-Key"
+                    value={config.apiKeyName || ""}
+                    onChange={(e) => updateConfig("apiKeyName", e.target.value)}
+                    className="glass border-border bg-transparent"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Valor de la API Key</Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="sk_live_..."
+                      value={config.apiKeyValue || ""}
+                      onChange={(e) => updateConfig("apiKeyValue", e.target.value)}
+                      className="glass border-border bg-transparent pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Ubicación</Label>
+                  <Select value={config.apiKeyLocation || "header"} onValueChange={(v) => updateConfig("apiKeyLocation", v)}>
+                    <SelectTrigger className="glass border-border bg-transparent">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="glass border-border">
+                      <SelectItem value="header">Header</SelectItem>
+                      <SelectItem value="query">Query Parameter</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {config.authType === "oauth2" && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-foreground">Usar Credencial OAuth</Label>
+                  <Select
+                    value={config.oauthCredentialId || ""}
+                    onValueChange={(v) => updateConfig("oauthCredentialId", v)}
+                  >
+                    <SelectTrigger className="glass border-border bg-transparent">
+                      <SelectValue placeholder="Selecciona credencial" />
+                    </SelectTrigger>
+                    <SelectContent className="glass border-border">
+                      {apiCredentials.map((cred) => (
+                        <SelectItem key={cred.id} value={cred.id}>
+                          {cred.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full glass border-border bg-transparent"
+                  onClick={() => setShowAddCredential(true)}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Configurar Nueva Credencial OAuth
+                </Button>
+              </>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="headers" className="border-border">
+          <AccordionTrigger className="text-foreground hover:no-underline">
+            <div className="flex items-center gap-2">
+              <FileCode className="h-4 w-4" />
+              Headers
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 pt-2">
+            <Textarea
+              placeholder={'{\n  "Content-Type": "application/json",\n  "Accept": "application/json"\n}'}
+              value={config.headers || ""}
+              onChange={(e) => updateConfig("headers", e.target.value)}
+              className="glass border-border bg-transparent font-mono text-sm min-h-[100px]"
+            />
+          </AccordionContent>
+        </AccordionItem>
+
+        {["POST", "PUT", "PATCH"].includes(config.httpMethod || "GET") && (
+          <AccordionItem value="body" className="border-border">
+            <AccordionTrigger className="text-foreground hover:no-underline">
+              <div className="flex items-center gap-2">
+                <FileJson className="h-4 w-4" />
+                Body
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3 pt-2">
+              <div className="space-y-2">
+                <Label className="text-foreground">Tipo de Contenido</Label>
+                <Select
+                  value={config.bodyType || "json"}
+                  onValueChange={(v) => updateConfig("bodyType", v)}
+                >
+                  <SelectTrigger className="glass border-border bg-transparent">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="glass border-border">
+                    <SelectItem value="json">JSON</SelectItem>
+                    <SelectItem value="form">Form URL Encoded</SelectItem>
+                    <SelectItem value="multipart">Multipart Form Data</SelectItem>
+                    <SelectItem value="xml">XML</SelectItem>
+                    <SelectItem value="text">Text/Plain</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Textarea
+                placeholder={
+                  config.bodyType === "xml"
+                    ? '<?xml version="1.0"?>\n<root>\n  <element>value</element>\n</root>'
+                    : '{\n  "key": "{{data.value}}",\n  "nombre": "{{data.nombre}}"\n}'
+                }
+                value={config.body || ""}
+                onChange={(e) => updateConfig("body", e.target.value)}
+                className="glass border-border bg-transparent font-mono text-sm min-h-[150px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Usa {"{{variable}}"} para insertar valores dinámicos del paso anterior
+              </p>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        <AccordionItem value="response" className="border-border">
+          <AccordionTrigger className="text-foreground hover:no-underline">
+            <div className="flex items-center gap-2">
+              <Server className="h-4 w-4" />
+              Manejo de Respuesta
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 pt-2">
+            <div className="space-y-2">
+              <Label className="text-foreground">Timeout (segundos)</Label>
+              <Input
+                type="number"
+                placeholder="30"
+                value={config.timeout || ""}
+                onChange={(e) => updateConfig("timeout", e.target.value)}
+                className="glass border-border bg-transparent"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground">Reintentos en caso de error</Label>
+              <Select value={config.retries || "0"} onValueChange={(v) => updateConfig("retries", v)}>
+                <SelectTrigger className="glass border-border bg-transparent">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="glass border-border">
+                  <SelectItem value="0">Sin reintentos</SelectItem>
+                  <SelectItem value="1">1 reintento</SelectItem>
+                  <SelectItem value="2">2 reintentos</SelectItem>
+                  <SelectItem value="3">3 reintentos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
+              <span className="text-sm text-foreground">Ignorar errores SSL</span>
+              <Switch
+                checked={config.ignoreSSLErrors === true}
+                onCheckedChange={(checked) => updateConfig("ignoreSSLErrors", checked)}
+              />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  )
+
+  // Renderizar configuración XML
+  const renderXmlConfig = () => (
+    <div className="space-y-4">
+      <div className="p-4 rounded-lg bg-muted/30 border border-border">
+        <h5 className="font-medium text-foreground mb-3 flex items-center gap-2">
+          <FileCode className="h-4 w-4" />
+          Constructor de XML
+        </h5>
+
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-foreground">Elemento Raíz</Label>
+            <Input
+              placeholder="root"
+              value={config.xmlRoot || ""}
+              onChange={(e) => updateConfig("xmlRoot", e.target.value)}
+              className="glass border-border bg-transparent"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-foreground">Namespace (opcional)</Label>
+            <Input
+              placeholder="http://ejemplo.com/schema"
+              value={config.xmlNamespace || ""}
+              onChange={(e) => updateConfig("xmlNamespace", e.target.value)}
+              className="glass border-border bg-transparent"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-foreground">Estructura XML</Label>
+            <Textarea
+              placeholder={`<?xml version="1.0" encoding="UTF-8"?>
+<pedido>
+  <cliente>
+    <nombre>{{data.nombre}}</nombre>
+    <email>{{data.email}}</email>
+  </cliente>
+  <items>
+    {{#each data.items}}
+    <item>
+      <producto>{{this.producto}}</producto>
+      <cantidad>{{this.cantidad}}</cantidad>
+    </item>
+    {{/each}}
+  </items>
+</pedido>`}
+              value={config.xmlTemplate || ""}
+              onChange={(e) => updateConfig("xmlTemplate", e.target.value)}
+              className="glass border-border bg-transparent font-mono text-sm min-h-[200px]"
+            />
+          </div>
+
+          <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
+            <p className="text-xs text-muted-foreground mb-2">Sintaxis disponible:</p>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li><code className="bg-muted/30 px-1 rounded">{"{{variable}}"}</code> - Insertar valor</li>
+              <li><code className="bg-muted/30 px-1 rounded">{"{{#each array}}...{{/each}}"}</code> - Iterar array</li>
+              <li><code className="bg-muted/30 px-1 rounded">{"{{#if condicion}}...{{/if}}"}</code> - Condicional</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
+        <span className="text-sm text-foreground">Validar XML contra XSD</span>
+        <Switch
+          checked={config.validateXSD === true}
+          onCheckedChange={(checked) => updateConfig("validateXSD", checked)}
+        />
+      </div>
+
+      {config.validateXSD && (
+        <div className="space-y-2">
+          <Label className="text-foreground">URL del Schema XSD</Label>
+          <Input
+            placeholder="https://ejemplo.com/schema.xsd"
+            value={config.xsdUrl || ""}
+            onChange={(e) => updateConfig("xsdUrl", e.target.value)}
+            className="glass border-border bg-transparent"
+          />
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass border-border max-h-[90vh] overflow-y-auto max-w-2xl">
+      <DialogContent className="glass border-border max-h-[90vh] overflow-y-auto max-w-3xl">
         <DialogHeader>
           <DialogTitle className="text-foreground">Editar Nodo</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Modifica las propiedades y configuracion de este nodo
+            Modifica las propiedades y configuración de este nodo
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="general" className="w-full">
           <TabsList className="grid w-full grid-cols-2 glass">
             <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="config">Configuracion</TabsTrigger>
+            <TabsTrigger value="config">Configuración</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-4 py-4">
@@ -138,7 +1179,7 @@ export function EditNodeDialog({
               </Label>
               <Input
                 id="edit-node-name"
-                placeholder="Ej: Enviar notificacion"
+                placeholder="Ej: Enviar notificación"
                 value={nodeName}
                 onChange={(e) => setNodeName(e.target.value)}
                 className="glass border-border bg-transparent"
@@ -168,11 +1209,11 @@ export function EditNodeDialog({
 
             <div className="space-y-2">
               <Label htmlFor="edit-node-description" className="text-foreground">
-                Descripcion (opcional)
+                Descripción (opcional)
               </Label>
               <Textarea
                 id="edit-node-description"
-                placeholder="Describe que hace este nodo..."
+                placeholder="Describe qué hace este nodo..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="glass border-border bg-transparent min-h-[80px]"
@@ -183,7 +1224,7 @@ export function EditNodeDialog({
           <TabsContent value="config" className="space-y-4 py-4">
             <div className="flex items-center gap-2 text-foreground font-medium mb-4">
               <Settings className="h-4 w-4" />
-              Configuracion del Nodo
+              Configuración del Nodo
             </div>
 
             {/* TRIGGER CONFIG */}
@@ -196,33 +1237,24 @@ export function EditNodeDialog({
                       <SelectValue placeholder="Selecciona el tipo" />
                     </SelectTrigger>
                     <SelectContent className="glass border-border">
-                      <SelectItem value="webhook">Webhook</SelectItem>
+                      <SelectItem value="webhook">Webhook HTTP</SelectItem>
                       <SelectItem value="schedule">Programado (Cron)</SelectItem>
                       <SelectItem value="email">Email Recibido</SelectItem>
                       <SelectItem value="database">Cambio en Base de Datos</SelectItem>
+                      <SelectItem value="file">Archivo Nuevo/Modificado</SelectItem>
+                      <SelectItem value="manual">Manual</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {config.triggerType === "webhook" && (
-                  <div className="space-y-2">
-                    <Label className="text-foreground">URL del Webhook</Label>
-                    <Input
-                      placeholder="https://api.ejemplo.com/webhook"
-                      value={config.webhookUrl || ""}
-                      onChange={(e) => updateConfig("webhookUrl", e.target.value)}
-                      className="glass border-border bg-transparent"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Esta URL recibira las peticiones HTTP que disparan el flujo
-                    </p>
-                  </div>
-                )}
+                {config.triggerType === "webhook" && renderHttpConfig()}
+                {config.triggerType === "email" && renderEmailConfig()}
+                {config.triggerType === "database" && renderDatabaseConfig()}
 
                 {config.triggerType === "schedule" && (
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label className="text-foreground">Expresion Cron</Label>
+                      <Label className="text-foreground">Expresión Cron</Label>
                       <Input
                         placeholder="0 0 * * *"
                         value={config.cronExpression || ""}
@@ -232,42 +1264,29 @@ export function EditNodeDialog({
                     </div>
                     <div className="p-3 rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-1">
                       <p className="font-medium text-foreground">Ejemplos comunes:</p>
-                      <p>0 * * * * - Cada hora</p>
-                      <p>0 0 * * * - Diario a medianoche</p>
-                      <p>0 8 * * 1-5 - Lunes a viernes a las 8:00</p>
-                      <p>0 0 1 * * - Primer dia de cada mes</p>
-                    </div>
-                  </div>
-                )}
-
-                {config.triggerType === "database" && (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Tabla</Label>
-                      <Input
-                        placeholder="nombre_tabla"
-                        value={config.dbTable || ""}
-                        onChange={(e) => updateConfig("dbTable", e.target.value)}
-                        className="glass border-border bg-transparent"
-                      />
+                      <p><code className="bg-muted/30 px-1 rounded">* * * * *</code> - Cada minuto</p>
+                      <p><code className="bg-muted/30 px-1 rounded">0 * * * *</code> - Cada hora</p>
+                      <p><code className="bg-muted/30 px-1 rounded">0 0 * * *</code> - Diario a medianoche</p>
+                      <p><code className="bg-muted/30 px-1 rounded">0 8 * * 1-5</code> - Lunes a viernes a las 8:00</p>
+                      <p><code className="bg-muted/30 px-1 rounded">0 0 1 * *</code> - Primer día de cada mes</p>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-foreground">Evento</Label>
-                      <Select value={config.dbEvent || ""} onValueChange={(v) => updateConfig("dbEvent", v)}>
+                      <Label className="text-foreground">Zona Horaria</Label>
+                      <Select value={config.timezone || "America/Bogota"} onValueChange={(v) => updateConfig("timezone", v)}>
                         <SelectTrigger className="glass border-border bg-transparent">
-                          <SelectValue placeholder="Selecciona evento" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="glass border-border">
-                          <SelectItem value="INSERT">INSERT - Nuevo registro</SelectItem>
-                          <SelectItem value="UPDATE">UPDATE - Actualizacion</SelectItem>
-                          <SelectItem value="DELETE">DELETE - Eliminacion</SelectItem>
+                          <SelectItem value="America/Bogota">America/Bogota (UTC-5)</SelectItem>
+                          <SelectItem value="America/Mexico_City">America/Mexico_City (UTC-6)</SelectItem>
+                          <SelectItem value="America/New_York">America/New_York (UTC-5)</SelectItem>
+                          <SelectItem value="Europe/Madrid">Europe/Madrid (UTC+1)</SelectItem>
+                          <SelectItem value="UTC">UTC</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                 )}
-
-                {config.triggerType === "email" && renderEmailConfig()}
               </div>
             )}
 
@@ -275,122 +1294,81 @@ export function EditNodeDialog({
             {nodeType === "action" && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-foreground">Tipo de Accion</Label>
+                  <Label className="text-foreground">Tipo de Acción</Label>
                   <Select value={config.actionType || ""} onValueChange={(v) => updateConfig("actionType", v)}>
                     <SelectTrigger className="glass border-border bg-transparent">
                       <SelectValue placeholder="Selecciona el tipo" />
                     </SelectTrigger>
                     <SelectContent className="glass border-border">
-                      <SelectItem value="http">Peticion HTTP / API</SelectItem>
-                      <SelectItem value="database">Operacion en Base de Datos</SelectItem>
+                      <SelectItem value="http">Petición HTTP / API</SelectItem>
+                      <SelectItem value="database">Operación en Base de Datos</SelectItem>
                       <SelectItem value="email">Enviar Email</SelectItem>
                       <SelectItem value="transform">Transformar Datos</SelectItem>
+                      <SelectItem value="xml">Construir/Parsear XML</SelectItem>
+                      <SelectItem value="json">Manipular JSON</SelectItem>
+                      <SelectItem value="file">Operación con Archivos</SelectItem>
+                      <SelectItem value="script">Ejecutar Script</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {config.actionType === "http" && (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Metodo HTTP</Label>
-                      <Select value={config.httpMethod || "GET"} onValueChange={(v) => updateConfig("httpMethod", v)}>
-                        <SelectTrigger className="glass border-border bg-transparent">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="glass border-border">
-                          <SelectItem value="GET">GET</SelectItem>
-                          <SelectItem value="POST">POST</SelectItem>
-                          <SelectItem value="PUT">PUT</SelectItem>
-                          <SelectItem value="PATCH">PATCH</SelectItem>
-                          <SelectItem value="DELETE">DELETE</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground">URL del Endpoint</Label>
-                      <Input
-                        placeholder="https://api.ejemplo.com/endpoint"
-                        value={config.endpoint || ""}
-                        onChange={(e) => updateConfig("endpoint", e.target.value)}
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Headers (JSON)</Label>
-                      <Textarea
-                        placeholder={'{\n  "Authorization": "Bearer token",\n  "Content-Type": "application/json"\n}'}
-                        value={config.headers || ""}
-                        onChange={(e) => updateConfig("headers", e.target.value)}
-                        className="glass border-border bg-transparent font-mono text-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Body (JSON) - Solo POST/PUT/PATCH</Label>
-                      <Textarea
-                        placeholder={'{\n  "key": "value"\n}'}
-                        value={config.body || ""}
-                        onChange={(e) => updateConfig("body", e.target.value)}
-                        className="glass border-border bg-transparent font-mono text-sm"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {config.actionType === "database" && (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Operacion</Label>
-                      <Select value={config.dbOperation || ""} onValueChange={(v) => updateConfig("dbOperation", v)}>
-                        <SelectTrigger className="glass border-border bg-transparent">
-                          <SelectValue placeholder="Selecciona operacion" />
-                        </SelectTrigger>
-                        <SelectContent className="glass border-border">
-                          <SelectItem value="select">SELECT - Consultar</SelectItem>
-                          <SelectItem value="insert">INSERT - Insertar</SelectItem>
-                          <SelectItem value="update">UPDATE - Actualizar</SelectItem>
-                          <SelectItem value="delete">DELETE - Eliminar</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Tabla</Label>
-                      <Input
-                        placeholder="nombre_tabla"
-                        value={config.tableName || ""}
-                        onChange={(e) => updateConfig("tableName", e.target.value)}
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Condicion WHERE (opcional)</Label>
-                      <Input
-                        placeholder="id = {{data.id}}"
-                        value={config.whereClause || ""}
-                        onChange={(e) => updateConfig("whereClause", e.target.value)}
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                  </div>
-                )}
+                {config.actionType === "http" && renderHttpConfig()}
+                {config.actionType === "database" && renderDatabaseConfig()}
+                {config.actionType === "email" && renderEmailConfig()}
+                {config.actionType === "xml" && renderXmlConfig()}
 
                 {config.actionType === "transform" && (
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label className="text-foreground">Codigo de Transformacion</Label>
+                      <Label className="text-foreground">Código de Transformación</Label>
                       <Textarea
-                        placeholder="// Transforma los datos\nreturn {\n  ...data,\n  processed: true\n}"
+                        placeholder={`// Transforma los datos
+// La variable 'data' contiene los datos del paso anterior
+return {
+  ...data,
+  processed: true,
+  timestamp: new Date().toISOString()
+}`}
                         value={config.transformCode || ""}
                         onChange={(e) => updateConfig("transformCode", e.target.value)}
-                        className="glass border-border bg-transparent font-mono text-sm min-h-[150px]"
+                        className="glass border-border bg-transparent font-mono text-sm min-h-[200px]"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Usa JavaScript para transformar los datos. La variable data contiene los datos del paso anterior.
-                    </p>
                   </div>
                 )}
 
-                {config.actionType === "email" && renderEmailConfig()}
+                {config.actionType === "json" && (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label className="text-foreground">Operación JSON</Label>
+                      <Select value={config.jsonOperation || ""} onValueChange={(v) => updateConfig("jsonOperation", v)}>
+                        <SelectTrigger className="glass border-border bg-transparent">
+                          <SelectValue placeholder="Selecciona operación" />
+                        </SelectTrigger>
+                        <SelectContent className="glass border-border">
+                          <SelectItem value="parse">Parsear JSON a Objeto</SelectItem>
+                          <SelectItem value="stringify">Objeto a JSON String</SelectItem>
+                          <SelectItem value="extract">Extraer Campo (JSONPath)</SelectItem>
+                          <SelectItem value="merge">Combinar Objetos</SelectItem>
+                          <SelectItem value="filter">Filtrar Array</SelectItem>
+                          <SelectItem value="map">Mapear Array</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {config.jsonOperation === "extract" && (
+                      <div className="space-y-2">
+                        <Label className="text-foreground">JSONPath</Label>
+                        <Input
+                          placeholder="$.data.items[*].name"
+                          value={config.jsonPath || ""}
+                          onChange={(e) => updateConfig("jsonPath", e.target.value)}
+                          className="glass border-border bg-transparent"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -420,17 +1398,19 @@ export function EditNodeDialog({
                       <SelectItem value="less">Menor que (&lt;)</SelectItem>
                       <SelectItem value="lessOrEqual">Menor o igual (&lt;=)</SelectItem>
                       <SelectItem value="contains">Contiene</SelectItem>
+                      <SelectItem value="notContains">No contiene</SelectItem>
                       <SelectItem value="startsWith">Empieza con</SelectItem>
                       <SelectItem value="endsWith">Termina con</SelectItem>
-                      <SelectItem value="isNull">Es nulo</SelectItem>
-                      <SelectItem value="isNotNull">No es nulo</SelectItem>
+                      <SelectItem value="isEmpty">Está vacío</SelectItem>
+                      <SelectItem value="isNotEmpty">No está vacío</SelectItem>
+                      <SelectItem value="regex">Expresión Regular</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-foreground">Valor de Comparacion</Label>
+                  <Label className="text-foreground">Valor a Comparar</Label>
                   <Input
-                    placeholder="Valor a comparar"
+                    placeholder="Ej: 200, 'success', true"
                     value={config.value || ""}
                     onChange={(e) => updateConfig("value", e.target.value)}
                     className="glass border-border bg-transparent"
@@ -449,129 +1429,63 @@ export function EditNodeDialog({
                       <SelectValue placeholder="Selecciona el tipo" />
                     </SelectTrigger>
                     <SelectContent className="glass border-border">
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="webhook">Webhook / HTTP</SelectItem>
-                      <SelectItem value="database">Base de Datos</SelectItem>
-                      <SelectItem value="notification">Notificacion Push</SelectItem>
+                      <SelectItem value="email">Enviar Email</SelectItem>
+                      <SelectItem value="http">Respuesta HTTP</SelectItem>
+                      <SelectItem value="database">Guardar en Base de Datos</SelectItem>
+                      <SelectItem value="file">Generar Archivo</SelectItem>
+                      <SelectItem value="webhook">Llamar Webhook</SelectItem>
+                      <SelectItem value="log">Registrar en Log</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {config.outputType === "email" && renderEmailConfig()}
+                {config.outputType === "database" && renderDatabaseConfig()}
+                {config.outputType === "http" && renderHttpConfig()}
 
-                {config.outputType === "webhook" && (
+                {config.outputType === "file" && (
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label className="text-foreground">URL de Destino</Label>
-                      <Input
-                        placeholder="https://api.ejemplo.com/callback"
-                        value={config.destinationUrl || ""}
-                        onChange={(e) => updateConfig("destinationUrl", e.target.value)}
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Metodo HTTP</Label>
-                      <Select value={config.httpMethod || "POST"} onValueChange={(v) => updateConfig("httpMethod", v)}>
+                      <Label className="text-foreground">Formato del Archivo</Label>
+                      <Select value={config.fileFormat || "json"} onValueChange={(v) => updateConfig("fileFormat", v)}>
                         <SelectTrigger className="glass border-border bg-transparent">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="glass border-border">
-                          <SelectItem value="POST">POST</SelectItem>
-                          <SelectItem value="PUT">PUT</SelectItem>
+                          <SelectItem value="json">JSON</SelectItem>
+                          <SelectItem value="xml">XML</SelectItem>
+                          <SelectItem value="csv">CSV</SelectItem>
+                          <SelectItem value="txt">Texto plano</SelectItem>
+                          <SelectItem value="pdf">PDF</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                )}
-
-                {config.outputType === "database" && (
-                  <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label className="text-foreground">Tabla de Destino</Label>
+                      <Label className="text-foreground">Nombre del Archivo</Label>
                       <Input
-                        placeholder="logs, audit_trail"
-                        value={config.tableName || ""}
-                        onChange={(e) => updateConfig("tableName", e.target.value)}
+                        placeholder="resultado_{{timestamp}}.json"
+                        value={config.fileName || ""}
+                        onChange={(e) => updateConfig("fileName", e.target.value)}
                         className="glass border-border bg-transparent"
                       />
                     </div>
                   </div>
                 )}
-
-                {config.outputType === "notification" && (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Titulo de la Notificacion</Label>
-                      <Input
-                        placeholder="Nueva actualizacion"
-                        value={config.notificationTitle || ""}
-                        onChange={(e) => updateConfig("notificationTitle", e.target.value)}
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Mensaje</Label>
-                      <Textarea
-                        placeholder="Contenido de la notificacion..."
-                        value={config.notificationBody || ""}
-                        onChange={(e) => updateConfig("notificationBody", e.target.value)}
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label className="text-foreground">Formato de Datos</Label>
-                  <Select value={config.format || "json"} onValueChange={(v) => updateConfig("format", v)}>
-                    <SelectTrigger className="glass border-border bg-transparent">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="glass border-border">
-                      <SelectItem value="json">JSON</SelectItem>
-                      <SelectItem value="xml">XML</SelectItem>
-                      <SelectItem value="text">Texto Plano</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-
-            {requiresEmailAuth && !config.emailCredentialId && (
-              <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                <div className="flex items-start gap-2">
-                  <Key className="h-5 w-5 text-yellow-500 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-yellow-500">Autenticacion requerida</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Este nodo requiere que conectes una cuenta de email para funcionar correctamente.
-                    </p>
-                  </div>
-                </div>
               </div>
             )}
           </TabsContent>
         </Tabs>
 
         <div className="flex justify-between gap-2 pt-4 border-t border-border">
-          <Button
-            variant="outline"
-            onClick={handleDelete}
-            className="glass border-red-500/50 text-red-500 hover:bg-red-500/10 bg-transparent"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
+          <Button variant="destructive" onClick={handleDelete} className="gap-2">
+            <Trash2 className="h-4 w-4" />
             Eliminar
           </Button>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="glass border-border bg-transparent"
-            >
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="glass border-border bg-transparent">
               Cancelar
             </Button>
-            <Button onClick={handleUpdate} disabled={!nodeName || !nodeType} className="bg-primary hover:bg-primary/90">
+            <Button onClick={handleUpdate} className="bg-primary hover:bg-primary/90">
               Guardar Cambios
             </Button>
           </div>
@@ -579,222 +1493,4 @@ export function EditNodeDialog({
       </DialogContent>
     </Dialog>
   )
-
-  function renderEmailConfig() {
-    if (showAddCredential) {
-      return (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label className="text-foreground font-medium">Conectar Cuenta de Email</Label>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setShowAddCredential(false)
-                setSelectedProvider(null)
-              }}
-              className="text-muted-foreground"
-            >
-              Cancelar
-            </Button>
-          </div>
-
-          {!selectedProvider ? (
-            <div className="grid grid-cols-2 gap-3">
-              {emailProviders.map((provider) => (
-                <button
-                  key={provider.id}
-                  onClick={() => setSelectedProvider(provider.id)}
-                  className="flex items-center gap-3 p-4 rounded-lg border border-border hover:border-primary/50 transition-colors bg-background/50"
-                >
-                  <div className={`w-10 h-10 rounded-lg ${provider.color} flex items-center justify-center`}>
-                    {provider.icon ? (
-                      <img src={provider.icon} alt={provider.name} className="w-6 h-6" />
-                    ) : (
-                      <Mail className="w-5 h-5 text-white" />
-                    )}
-                  </div>
-                  <span className="text-sm font-medium text-foreground">{provider.name}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg border border-border bg-background/50">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-10 h-10 rounded-lg ${emailProviders.find(p => p.id === selectedProvider)?.color} flex items-center justify-center`}>
-                    <Mail className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {emailProviders.find(p => p.id === selectedProvider)?.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Conecta tu cuenta para enviar y recibir emails
-                    </p>
-                  </div>
-                </div>
-
-                {selectedProvider === "imap" ? (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label className="text-foreground text-sm">Servidor IMAP</Label>
-                      <Input
-                        placeholder="imap.ejemplo.com"
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label className="text-foreground text-sm">Puerto</Label>
-                        <Input
-                          placeholder="993"
-                          className="glass border-border bg-transparent"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-foreground text-sm">SSL/TLS</Label>
-                        <Select defaultValue="tls">
-                          <SelectTrigger className="glass border-border bg-transparent">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="glass border-border">
-                            <SelectItem value="tls">TLS</SelectItem>
-                            <SelectItem value="ssl">SSL</SelectItem>
-                            <SelectItem value="none">Ninguno</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground text-sm">Email</Label>
-                      <Input
-                        placeholder="usuario@ejemplo.com"
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-foreground text-sm">Contrasena</Label>
-                      <Input
-                        type="password"
-                        placeholder="********"
-                        className="glass border-border bg-transparent"
-                      />
-                    </div>
-                    <Button className="w-full bg-primary hover:bg-primary/90">
-                      Conectar
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    className="w-full bg-primary hover:bg-primary/90"
-                    onClick={() => handleConnectProvider(selectedProvider)}
-                    disabled={connectingProvider === selectedProvider}
-                  >
-                    {connectingProvider === selectedProvider ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                        Conectando...
-                      </>
-                    ) : (
-                      <>
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Conectar con {emailProviders.find(p => p.id === selectedProvider)?.name}
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )
-    }
-
-    return (
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <Label className="text-foreground">Cuenta de Email</Label>
-          <Select
-            value={config.emailCredentialId || ""}
-            onValueChange={(v) => updateConfig("emailCredentialId", v)}
-          >
-            <SelectTrigger className="glass border-border bg-transparent">
-              <SelectValue placeholder="Selecciona una cuenta" />
-            </SelectTrigger>
-            <SelectContent className="glass border-border">
-              {credentials.map((cred) => (
-                <SelectItem key={cred.id} value={cred.id}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded ${emailProviders.find(p => p.id === cred.provider)?.color} flex items-center justify-center`}>
-                      <Mail className="h-3 w-3 text-white" />
-                    </div>
-                    <span>{cred.name}</span>
-                    <CheckCircle2 className="h-3 w-3 text-green-500 ml-auto" />
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowAddCredential(true)}
-          className="glass border-border bg-transparent w-full"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Conectar nueva cuenta
-        </Button>
-
-        {nodeType === "trigger" && config.triggerType === "email" && (
-          <div className="space-y-2">
-            <Label className="text-foreground">Filtro de Asunto (opcional)</Label>
-            <Input
-              placeholder="Ej: Factura, Pedido confirmado"
-              value={config.subjectFilter || ""}
-              onChange={(e) => updateConfig("subjectFilter", e.target.value)}
-              className="glass border-border bg-transparent"
-            />
-          </div>
-        )}
-
-        {(nodeType === "action" || nodeType === "output") && (
-          <>
-            <div className="space-y-2">
-              <Label className="text-foreground">Destinatarios</Label>
-              <Input
-                placeholder="usuario@ejemplo.com, otro@ejemplo.com"
-                value={config.recipients || ""}
-                onChange={(e) => updateConfig("recipients", e.target.value)}
-                className="glass border-border bg-transparent"
-              />
-              <p className="text-xs text-muted-foreground">
-                Usa {"{{variable}}"} para datos dinamicos, ej: {"{{customer.email}}"}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-foreground">Asunto</Label>
-              <Input
-                placeholder="Asunto del email"
-                value={config.subject || ""}
-                onChange={(e) => updateConfig("subject", e.target.value)}
-                className="glass border-border bg-transparent"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-foreground">Cuerpo del Mensaje</Label>
-              <Textarea
-                placeholder="Contenido del email..."
-                value={config.emailBody || ""}
-                onChange={(e) => updateConfig("emailBody", e.target.value)}
-                className="glass border-border bg-transparent min-h-[100px]"
-              />
-            </div>
-          </>
-        )}
-      </div>
-    )
-  }
 }
