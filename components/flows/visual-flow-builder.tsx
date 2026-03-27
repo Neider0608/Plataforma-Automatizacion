@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Save, Play, Plus } from "lucide-react"
 import { FlowCanvas } from "./flow-canvas"
 import { AddNodeDialog } from "./add-node-dialog"
 import { EditNodeDialog } from "./edit-node-dialog"
 import { AssignAgentDialog } from "./assign-agent-dialog"
+import { getFlowById, getEmptyFlow } from "@/lib/flow-data"
 
 export type Node = {
   id: string
@@ -20,6 +22,9 @@ export type Node = {
 }
 
 export function VisualFlowBuilder() {
+  const params = useParams()
+  const flowId = params?.id as string | undefined
+  
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [showAddNode, setShowAddNode] = useState(false)
   const [showEditNode, setShowEditNode] = useState(false)
@@ -28,15 +33,28 @@ export function VisualFlowBuilder() {
   const [isTestMode, setIsTestMode] = useState(false)
   const [nodes, setNodes] = useState<Node[]>([])
   const [assignedAgent, setAssignedAgent] = useState<string | null>(null)
+  const [flowName, setFlowName] = useState("Nuevo Flujo")
+  const [flowDescription, setFlowDescription] = useState("")
+
+  useEffect(() => {
+    if (flowId) {
+      const flow = getFlowById(flowId)
+      if (flow) {
+        setFlowName(flow.name)
+        setFlowDescription(flow.description)
+        setNodes(flow.nodes)
+      }
+    }
+  }, [flowId])
 
   const handleTestFlow = () => {
     setIsTestMode(true)
     setTimeout(() => {
       setIsTestMode(false)
-    }, 5000)
+    }, nodes.length * 600 + 1000)
   }
 
-  const handleAddNode = (nodeName: string, nodeType: string) => {
+  const handleAddNode = (nodeName: string, nodeType: string, config?: any) => {
     const colorMap: Record<string, string> = {
       trigger: "bg-primary",
       action: "bg-secondary",
@@ -49,8 +67,9 @@ export function VisualFlowBuilder() {
       type: nodeType as Node["type"],
       label: nodeName,
       x: 50,
-      y: nodes.length === 0 ? 10 : nodes[nodes.length - 1].y + 15,
+      y: nodes.length === 0 ? 10 : Math.min(nodes[nodes.length - 1].y + 15, 90),
       color: colorMap[nodeType] || "bg-primary",
+      config: config || {},
     }
 
     setNodes((prev) => [...prev, newNode])
@@ -59,7 +78,7 @@ export function VisualFlowBuilder() {
   const handleNodeDoubleClick = (nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId)
     if (node) {
-      setNodeToEdit(node)
+      setNodeToEdit({ ...node })
       setShowEditNode(true)
     }
   }
@@ -81,15 +100,17 @@ export function VisualFlowBuilder() {
               type: nodeType as Node["type"],
               color: colorMap[nodeType] || "bg-primary",
               description,
-              config,
+              config: config || {},
             }
           : node,
       ),
     )
+    setNodeToEdit(null)
   }
 
   const handleDeleteNode = (nodeId: string) => {
     setNodes((prev) => prev.filter((node) => node.id !== nodeId))
+    setNodeToEdit(null)
   }
 
   const handleSaveFlow = () => {
@@ -106,12 +127,12 @@ export function VisualFlowBuilder() {
     <div className="h-full flex flex-col">
       <div className="h-16 border-b border-border glass flex items-center justify-between px-6">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Nuevo Flujo</h2>
+          <h2 className="text-lg font-semibold text-foreground">{flowName}</h2>
           <p className="text-sm text-muted-foreground">
             {nodes.length === 0
               ? "Comienza agregando nodos"
               : assignedAgent
-                ? `${nodes.length} nodo${nodes.length > 1 ? "s" : ""} • Agente: ${assignedAgent}`
+                ? `${nodes.length} nodo${nodes.length > 1 ? "s" : ""} - Agente: ${assignedAgent}`
                 : `${nodes.length} nodo${nodes.length > 1 ? "s" : ""}`}
           </p>
         </div>
@@ -159,7 +180,10 @@ export function VisualFlowBuilder() {
       <AddNodeDialog open={showAddNode} onOpenChange={setShowAddNode} onAddNode={handleAddNode} />
       <EditNodeDialog
         open={showEditNode}
-        onOpenChange={setShowEditNode}
+        onOpenChange={(open) => {
+          setShowEditNode(open)
+          if (!open) setNodeToEdit(null)
+        }}
         node={nodeToEdit}
         onUpdateNode={handleUpdateNode}
         onDeleteNode={handleDeleteNode}
