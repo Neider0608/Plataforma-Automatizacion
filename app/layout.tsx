@@ -6,21 +6,15 @@ import { ThemeProvider } from "@/hooks/use-theme"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "Plataforma de Automatización Inteligente",
-  description: "Software SaaS de automatización sin código con IA",
-    generator: 'v0.app'
+  title: "Facturación Electrónica | Neidsoft",
+  description: "Configura la recepción, extracción, consulta y almacenamiento de comprobantes electrónicos.",
+  generator: "v0.app",
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className="dark">
-      <body className={`${inter.className} font-sans antialiased`}>
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
+    <html lang="es" className="bg-background">
+      <body className={`${inter.className} font-sans antialiased`}><ThemeProvider>{children}</ThemeProvider></body>
     </html>
   )
 }
